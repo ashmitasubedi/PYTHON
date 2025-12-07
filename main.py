@@ -2,17 +2,18 @@ from tkinter import *
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import os
+from student import Student
 
 
 class Face_Recognition_System:
-    def __init__(self, root):
+    def __init__(self, root):#CONSTUUCTOR CALLED root represents the main Tkinter window
         self.root = root
-        self.root.geometry("1530x790+0+0")
+        self.root.geometry("1530x790+0+0")#SETTING THE GEOMETRY OF THE WINDOW
         self.root.title("Face Recognition Attendance System")
         self.root.configure(bg="#0a0e27")
         
         # Color scheme
-        self.colors = {
+        self.colors = {# Custom color palette aafaile create gareko colors 
             'bg_dark': '#0a0e27',
             'bg_card': '#1a1f3a',
             'primary': '#4a90e2',
@@ -24,9 +25,9 @@ class Face_Recognition_System:
             'warning': '#f39c12'
         }
 
-        # Create main canvas for gradient background
+        # Create main canvas for gradient background A Canvas is used to draw shapes / lines.
         self.canvas = Canvas(self.root, width=1530, height=790, 
-                           bg=self.colors['bg_dark'], highlightthickness=0)
+                           bg=self.colors['bg_dark'], highlightthickness=0)#
         self.canvas.place(x=0, y=0)
         
         # Create gradient background
@@ -59,6 +60,7 @@ class Face_Recognition_System:
         subtitle_lbl.pack()
 
         # ========= Main Content Area =========
+        #All the big modern buttons appear inside this frame.
         content_frame = Frame(self.root, bg=self.colors['bg_dark'])
         content_frame.place(x=100, y=140, width=1330, height=600)
 
@@ -130,7 +132,7 @@ class Face_Recognition_System:
             }
         ]
 
-        # Create modern card-style buttons
+        # Create modern card-style buttons Each button gets passed to a function that builds a “card-style UI”.
         for btn_data in self.buttons_data:
             self.create_modern_button(content_frame, btn_data)
 
@@ -150,6 +152,7 @@ class Face_Recognition_System:
             b = int(39 + (55 - 39) * i / 790)
             color = f'#{r:02x}{g:02x}{b:02x}'
             self.canvas.create_line(0, i, 1530, i, fill=color)
+            #This draws 790 horizontal colored lines (one for each pixel row).
 
     def create_modern_button(self, parent, btn_data):
         """Create a modern card-style button with hover effects"""
@@ -163,9 +166,9 @@ class Face_Recognition_System:
         card = Frame(parent, bg=self.colors['bg_card'], 
                     highlightbackground=btn_data['color'],
                     highlightthickness=0)
-        card.place(x=x, y=y, width=280, height=240)
+        card.place(x=x, y=y, width=280, height=240)#This creates a rectangular card.
         
-        # Icon and text frame
+        # Icon and text frame large icon and text inside the card
         content = Frame(card, bg=self.colors['bg_card'])
         content.place(relx=0.5, rely=0.4, anchor=CENTER)
         
@@ -237,8 +240,10 @@ class Face_Recognition_System:
 
     # ========= Button Functions =========
     def student_details(self):
+        self.__new__window=Toplevel(self.root)
+        self.app=Student(self.__new__window)    
         self.show_notification("Opening Student Details...", "#4a90e2")
-        print("Student Details clicked")
+        print("Student Details clicked")    
 
     def face_recognition(self):
         self.show_notification("Initializing Face Recognition...", "#9b59b6")
