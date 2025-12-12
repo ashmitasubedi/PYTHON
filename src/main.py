@@ -3,6 +3,8 @@ from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import os
 from student import Student
+from train import train
+from FaceRecognization import FaceRecognitionSystem
 
 
 class Face_Recognition_System:
@@ -111,7 +113,7 @@ class Face_Recognition_System:
                 'icon': '📸',
                 'color': '#e91e63',
                 'hover': '#c2185b',
-                'command': self.photos,
+                'command': lambda: self.open_img("data", 1),
                 'row': 1, 'col': 1
             },
             {
@@ -246,8 +248,10 @@ class Face_Recognition_System:
         print("Student Details clicked")    
 
     def face_recognition(self):
-        self.show_notification("Initializing Face Recognition...", "#9b59b6")
-        print("Face Recognition clicked")
+        self.__new__window=Toplevel(self.root)
+        self.app= FaceRecognitionSystem(self.__new__window)    
+        self.show_notification("Opening  face recognization...", "#4a90e2")
+        print("Student Details clicked")    
 
     def attendance(self):
         self.show_notification("Loading Attendance Records...", "#2ecc71")
@@ -258,12 +262,10 @@ class Face_Recognition_System:
         print("Help Desk clicked")
 
     def train_data(self):
-        self.show_notification("Starting Model Training...", "#1abc9c")
+        self.__new__window=Toplevel(self.root)
+        self.app=train(self.__new__window)
         print("Train Data clicked")
 
-    def photos(self):
-        self.show_notification("Opening Photo Gallery...", "#e91e63")
-        print("Photos clicked")
 
     def developer(self):
         self.show_notification("Developer Information...", "#607d8b")
@@ -272,7 +274,9 @@ class Face_Recognition_System:
     def exit_app(self):
         self.show_notification("Shutting down system...", "#e74c3c")
         self.root.after(1000, self.root.destroy)
-
+#IMAGES 
+    def open_img(self, path, size=None):
+     os.startfile(path)
 
 # Run program
 if __name__ == "__main__":
