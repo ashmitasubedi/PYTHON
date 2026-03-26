@@ -7,8 +7,10 @@ import cv2
 import numpy as np
 import threading
 from datetime import datetime
-
-
+# ===== FIXED BASE PATH =====
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(BASE_DIR)                    # → PYTHON
+DATA_DIR = os.path.join(PROJECT_DIR, "data")               
 
 class train:
     def __init__(self, root):
@@ -277,17 +279,26 @@ class train:
     def refresh_stats(self):
         """Refresh statistics about training data"""
         try:
-            data_dir = "data"
-            if os.path.exists(data_dir):
-                files = [f for f in os.listdir(data_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]
+            if os.path.exists(DATA_DIR):
+                files = [
+                    f for f in os.listdir(DATA_DIR)
+                    if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                ]
+
                 self.total_images = len(files)
                 self.total_img_lbl.config(text=f"Total Images: {self.total_images}")
-                self.status_lbl.config(text="Status: Ready to Train", fg="#00ff88")
+
+                if self.total_images > 0:
+                    self.status_lbl.config(text="Status: Ready to Train", fg="#00ff88")
+                else:
+                    self.status_lbl.config(text="Status: No Images Found", fg="#ff4444")
             else:
                 self.total_img_lbl.config(text="Total Images: 0")
-                self.status_lbl.config(text="Status: No Data Folder", fg="#ff4444")
+                self.status_lbl.config(text="Status: Data Folder Missing", fg="#ff4444")
+
         except Exception as e:
-            print(f"Error refreshing stats: {e}")
+            print("Error refreshing stats:", e)
+
     
     def start_training_thread(self):
         """Start training in a separate thread"""
@@ -330,7 +341,8 @@ class train:
     def train_classifier(self):
         try:
             start_time = datetime.now()
-            data_dir = "data"
+            data_dir = DATA_DIR
+
             
             if not os.path.exists(data_dir):
                 messagebox.showerror("Error", "Data folder not found!", parent=self.root)
@@ -389,10 +401,12 @@ class train:
             ids = np.array(ids)
             
             # Train and save
+            # Train and save
             self.status_lbl.config(text="Status: Saving Classifier...", fg="#00d4ff")
             clf = cv2.face.LBPHFaceRecognizer_create()
             clf.train(faces, ids)
-            clf.write("classifier.xml")
+            clf.write(os.path.join(BASE_DIR, "classifier.xml"))
+
             
             elapsed = datetime.now() - start_time
             

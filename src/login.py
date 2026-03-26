@@ -26,6 +26,8 @@ class ModernLogin:
         canvas.create_oval(-100, -100, 600, 600, fill="#1a1a3e", outline="")
         canvas.create_oval(800, 200, 1600, 1000, fill="#16213e", outline="")
         canvas.create_oval(300, 400, 1100, 1200, fill="#0f3460", outline="")
+
+       
         
         # Accent circles
         canvas.create_oval(100, 50, 250, 200, fill="#e94560", outline="")

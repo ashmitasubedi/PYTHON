@@ -8,7 +8,6 @@ import mysql.connector
 from mysql.connector import Error
 import cv2
 
-
 class Student:
     def __init__(self, root):#CONSTUUCTOR CALLED root represents the main Tkinter window
         self.root = root
@@ -30,6 +29,9 @@ class Student:
         self.var_address = StringVar()
         self.var_teacher = StringVar()
         self.var_photo_sample = StringVar()
+        self.var_search_by = StringVar()
+        self.var_search_txt = StringVar()
+
         
         
         # Color scheme          
@@ -52,6 +54,14 @@ class Student:
         Left_frame = LabelFrame(main_frame, bd=2, bg=self.colors['primary'], relief=RIDGE,#LabelFrame banako
                                 text="Student Details", font=("Helvetica", 12, "bold"), fg="white")
         Left_frame.place(x=10, y=10, width=760, height=580)
+        #courses 
+        self.department_courses = {
+        "Arts": ("BA", "BFA", "BHM"),
+        "IT": ("BCA", "BIM"),
+        "Science": ("BSC", "BSC-CSIT"),
+        "Commerce": ("BBA", "BBS")
+}
+
        # current courses
         current_course = LabelFrame(
             Left_frame, 
@@ -84,6 +94,10 @@ class Student:
         dep_combo["values"] = ("Select Department", "Arts", "IT", "Science", "Commerce")
         dep_combo.current(0)
         dep_combo.grid(row=0, column=1, padx=10, pady=5, sticky=W)
+
+        # Bind selection event
+        dep_combo.bind("<<ComboboxSelected>>", self.update_courses)
+
 
         # ------------------ Semester ------------------
         semester_label = Label(
@@ -141,16 +155,16 @@ class Student:
         )
         course_label.grid(row=1, column=2, padx=10, pady=5, sticky=W)
 
-        course_combo = ttk.Combobox(
-            current_course,
-            textvariable=self.var_course,
-            font=("Helvetica", 12, "bold"),
-            state="readonly",
-            width=20
-        )
-        course_combo["values"] = ("Select Course", "BCA", "BBA", "BSC-CSIT", "BIM", "BBS")
-        course_combo.current(0)
-        course_combo.grid(row=1, column=3, padx=10, pady=5, sticky=W)
+        self.course_combo = ttk.Combobox(
+        current_course,
+        textvariable=self.var_course,
+        font=("Helvetica", 12, "bold"),
+        state="readonly",
+         width=20
+            )
+        self.course_combo["values"] = ("Select Course",)
+        self.course_combo.current(0)
+        self.course_combo.grid(row=1, column=3, padx=10, pady=5, sticky=W)
 
         #class student information
         student_info = LabelFrame( Left_frame, bd=2, bg=self.colors['primary'],  relief=RIDGE, text="Student Information", font=("Helvetica", 12, "bold"),  fg="white")
@@ -269,15 +283,17 @@ class Student:
         row2 = Frame(btn_frame, bg=self.colors['primary'])
         row2.pack(pady=5)
 
-        take_photo_btn = Button(row2, text="Take Photo Sample",width=20, 
+        take_photo_btn = Button(row2, text="Take Photo Sample",width=20, command=self.generate_dataset, 
                                 font=("Helvetica", 12, "bold"), bg=self.colors['bg_dark'], fg="white")
         take_photo_btn.pack(side=LEFT, padx=20)
 
-        update_photo_btn = Button(row2, text="Update Photo Sample", width=20,
+        update_photo_btn = Button(row2, text="Update Photo Sample", width=20,command=self.update_photo_sample,
                                 font=("Helvetica", 12, "bold"), bg=self.colors['bg_card'], fg="white")
         update_photo_btn.pack(side=LEFT, padx=20)
 
-                # Right Label Frame
+        # Right Label Frame
+        #--------------------------------------------#
+        #-----------------------------------------=---#
         Right_frame = LabelFrame(main_frame, bd=2, bg=self.colors['primary'], relief=RIDGE,
                                 text="Student Details", font=("Helvetica", 12, "bold"), fg="white")
         Right_frame.place(x=780, y=10, width=740, height=580)
@@ -291,24 +307,36 @@ class Student:
         search_frame = Frame(Right_frame, bg=self.colors['primary'])
         search_frame.grid(row=1, column=0, columnspan=5, padx=10, pady=5, sticky=W)
 
+       
         # Search By Combobox
-        search_combo = ttk.Combobox(search_frame, font=("Helvetica", 12, "bold"),
-                                    state="readonly", width=12)
+        search_combo = ttk.Combobox(
+            search_frame,
+            textvariable=self.var_search_by,
+            font=("Helvetica", 12, "bold"),
+            state="readonly",
+            width=12
+        )
         search_combo["values"] = ("Select", "Roll No", "Phone No", "Student ID")
         search_combo.current(0)
         search_combo.pack(side=LEFT, padx=5)
 
         # Search Entry
-        search_entry = ttk.Entry(search_frame, width=18, font=("Helvetica", 12, "bold"))
+        search_entry = ttk.Entry(
+            search_frame,
+            textvariable=self.var_search_txt,
+            width=18,
+            font=("Helvetica", 12, "bold")
+        )
         search_entry.pack(side=LEFT, padx=5)
 
+
         # Search Button
-        search_btn = Button(search_frame, text="Search", width=10, font=("Helvetica", 12, "bold"),
+        search_btn = Button(search_frame, text="Search", width=10, command=self.search_data, font=("Helvetica", 12, "bold"),
                             bg=self.colors['bg_dark'], fg="white", bd=0)
         search_btn.pack(side=LEFT, padx=5)
 
         # Show All Button
-        showAll_btn = Button(search_frame, text="Show All", width=10, font=("Helvetica", 12, "bold"),
+        showAll_btn = Button(search_frame, text="Show All", width=10, command=self.fetch_data, font=("Helvetica", 12, "bold"),
                             bg=self.colors['bg_dark'], fg="white", bd=0)
         showAll_btn.pack(side=LEFT, padx=5)
         # Table Frame
@@ -529,6 +557,10 @@ class Student:
             messagebox.showerror("Error", "All Fields are required", parent=self.root)  
         else:
             try:
+                # Create data directory if it doesn't exist
+                if not os.path.exists("data"):
+                    os.makedirs("data")
+                
                 conn = mysql.connector.connect(
                     host="localhost",
                     username="root",
@@ -536,13 +568,12 @@ class Student:
                     database="face_recognizer"
                 )
                 my_cursor = conn.cursor()
-                my_cursor.execute("select * from student")
-                myresult = my_cursor.fetchall()
-                id = 0
-                for x in myresult:
-                    id += 1
-                my_cursor.execute("update student set department=%s, course=%s, year=%s, semester=%s, name=%s, roll_no=%s, gender=%s, dob=%s, email=%s, phone=%s, address=%s, teacher=%s ,photoSample=%s WHERE student_id=%s", (
-                    
+                
+                # Get student ID for file naming
+                student_id = self.var_std_id.get()
+                
+                # Update student details in database first (without photo sample status)
+                my_cursor.execute("UPDATE student SET department=%s, course=%s, year=%s, semester=%s, name=%s, roll_no=%s, gender=%s, dob=%s, email=%s, phone=%s, address=%s, teacher=%s WHERE student_id=%s", (
                     self.var_dep.get(),
                     self.var_course.get(),
                     self.var_year.get(),
@@ -555,44 +586,177 @@ class Student:
                     self.var_phone.get(),
                     self.var_address.get(),
                     self.var_teacher.get(),
-                    self.var_photo_sample.get(),
-                    self.var_std_id.get()==id+1
+                    student_id
                 ))
                 conn.commit()
-                self.fetch_data()
-                self.reset_data()
                 conn.close()
-           #load predefined data on face frontals from opencv
-                #  haarcascade classifier
-                face_classifier = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+                
+                # Load haarcascade classifier
+                cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
+                
+                # Check if cascade file exists
+                if not os.path.exists(cascade_path):
+                    messagebox.showerror("Error", f"Cascade file not found at: {cascade_path}", parent=self.root)
+                    return
+                    
+                face_classifier = cv2.CascadeClassifier(cascade_path)
+                
+                if face_classifier.empty():
+                    messagebox.showerror("Error", "Failed to load cascade classifier", parent=self.root)
+                    return
+    
                 def face_cropped(img):
                     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                     faces = face_classifier.detectMultiScale(gray, 1.3, 5)
-                    # scaling factor = 1.3
-                    # minimum neighbor = 5
                     for (x, y, w, h) in faces:
                         face_cropped = img[y:y+h, x:x+w]
                         return face_cropped
+                    return None
+                
                 cap = cv2.VideoCapture(0)
-                img_id = 0 #image capture vayepaxi yesma save hunxa
+                
+                if not cap.isOpened():
+                    messagebox.showerror("Error", "Could not open camera", parent=self.root)
+                    return
+                
+                img_id = 0
+                messagebox.showinfo("Info", "Camera started. Press ENTER to stop or wait for 100 samples", parent=self.root)
+                
                 while True:
                     ret, my_frame = cap.read()
-                    if face_cropped(my_frame) is not None:
-                        img_id += 1
-                        face = cv2.resize(face_cropped(my_frame), (450, 450))#image ligeko lai crop garya
-                        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)#convert to gray scale
-                        file_name_path = "data/user." + str(id) + "." + str(img_id) + ".jpg"#for eg user/.1.13.jpg
-                        cv2.imwrite(file_name_path, face)
-                        cv2.putText(face, str(img_id), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), 2)#face mathi rectangle banauxa
-                        cv2.imshow("Cropped Face", face)
-
-                    if cv2.waitKey(1) == 13 or int(img_id) == 100: #13 is the enter key enter thichepaxi close hunxa
+                    
+                    if not ret:
+                        messagebox.showerror("Error", "Failed to capture frame", parent=self.root)
                         break
+                    
+                    cropped_face = face_cropped(my_frame)
+                    
+                    if cropped_face is not None:
+                        img_id += 1
+                        face = cv2.resize(cropped_face, (450, 450))
+                        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                        
+                        # Save with proper file path
+                        file_name_path = f"data/user.{student_id}.{img_id}.jpg"
+                        cv2.imwrite(file_name_path, face)
+                        
+                        # Display counter on face
+                        cv2.putText(face, str(img_id), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), 2)
+                        cv2.imshow("Cropped Face", face)
+                    
+                    # Show original frame with face detection
+                    cv2.imshow("Camera Feed", my_frame)
+                    
+                    # Exit on Enter key (13) or after 100 images
+                    if cv2.waitKey(1) == 13 or int(img_id) == 100:
+                        break
+                
                 cap.release()
                 cv2.destroyAllWindows()
-                messagebox.showinfo("Result", "Generating data set completed!!!")
+                
+                if img_id > 0:
+                    # Update photo sample status in database
+                    conn = mysql.connector.connect(
+                        host="localhost",
+                        username="root",
+                        password="",
+                        database="face_recognizer"
+                    )
+                    my_cursor = conn.cursor()
+                    my_cursor.execute("UPDATE student SET photoSample=%s WHERE student_id=%s", 
+                                    ("Yes", student_id))
+                    conn.commit()
+                    conn.close()
+                    
+                    self.fetch_data()
+                    messagebox.showinfo("Result", f"Dataset generation completed!\n{img_id} photos saved successfully.", parent=self.root)
+                else:
+                    messagebox.showwarning("Warning", "No face detected. Please try again.", parent=self.root)
+                    
             except Exception as es:
                 messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
+    def update_courses(self, event):
+        department = self.var_dep.get()
+
+        if department in self.department_courses:
+            courses = self.department_courses[department]
+            self.course_combo["values"] = ("Select Course",) + courses
+            self.course_combo.current(0)
+        else:
+            self.course_combo["values"] = ("Select Course",)
+            self.course_combo.current(0)
+    def search_data(self):
+        if self.var_search_by.get() == "Select" or self.var_search_txt.get() == "":
+            messagebox.showerror("Error", "Please select search criteria and enter value", parent=self.root)
+            return
+
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                username="root",
+                password="",
+                database="face_recognizer"
+            )
+            my_cursor = conn.cursor()
+
+            # Map combobox selection to database column
+            column_map = {
+                "Roll No": "roll_no",
+                "Phone No": "phone",
+                "Student ID": "student_id"
+            }
+
+            column = column_map[self.var_search_by.get()]
+            query = f"SELECT * FROM student WHERE {column} LIKE %s"
+            value = "%" + self.var_search_txt.get() + "%"
+
+            my_cursor.execute(query, (value,))
+            data = my_cursor.fetchall()
+
+            # Clear table
+            self.student_table.delete(*self.student_table.get_children())
+
+            if len(data) != 0:
+                for row in data:
+                    self.student_table.insert("", END, values=row)
+            else:
+                messagebox.showinfo("Result", "No record found", parent=self.root)
+
+            conn.close()
+
+        except Exception as es:
+            messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
+    
+    def update_photo_sample(self):
+        if self.var_std_id.get() == "":
+            messagebox.showerror("Error", "Student ID is required", parent=self.root)
+            return
+
+        try:
+            conn = mysql.connector.connect(
+                host="localhost",
+                username="root",
+                password="",
+                database="face_recognizer"
+            )
+            my_cursor = conn.cursor()
+
+            my_cursor.execute(
+                "UPDATE student SET photoSample=%s WHERE student_id=%s",
+                ("Yes", self.var_std_id.get())
+            )
+
+            conn.commit()
+            conn.close()
+
+            self.fetch_data()
+            messagebox.showinfo("Success", "Photo sample updated successfully", parent=self.root)
+
+        except Exception as es:
+            messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
+
+
+
 
 
     

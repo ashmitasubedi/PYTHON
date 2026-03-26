@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import os
+from attendence import AttendanceSystem
 from student import Student
 from train import train
 from FaceRecognization import FaceRecognitionSystem
@@ -289,7 +290,13 @@ class Face_Recognition_System:
         self.__new__window=Toplevel(self.root)
         self.app=Student(self.__new__window)    
         self.show_notification("Opening Student Details...", "#4a90e2")
-        print("Student Details clicked")    
+        print("Student Details clicked") 
+
+    def photos(self):
+        folder_path1= r"C:\Users\Dell\Desktop\PYTHON\src\data"
+        os.startfile(folder_path1)
+        self.show_notification("Opening Photos Folder...", "#e91e63")
+        print("Photos clicked")
 
     def face_recognition(self):
         self.__new__window=Toplevel(self.root)
@@ -298,7 +305,9 @@ class Face_Recognition_System:
         print("Student Details clicked")    
 
     def attendance(self):
-        self.show_notification("Loading Attendance Records...", "#2ecc71")
+        self.show_notification("Opening Attendance Module...", "#2ecc71")
+        self.__new__window=Toplevel(self.root)
+        self.app=AttendanceSystem(self.__new__window)    
         print("Attendance clicked")
 
     def help_desk(self):

@@ -377,8 +377,8 @@ class AttendanceSystem:
         self.var_std_name.set(data[1])
         self.var_roll.set(data[2])
         self.var_department.set(data[3])
-        self.var_date.set(data[4])
-        self.var_time.set(data[5])
+        self.var_date.set(data[5])
+        self.var_time.set(data[4])
         self.var_status.set(data[6])
 
     def fetch_data(self, rows):
@@ -394,17 +394,46 @@ class AttendanceSystem:
         global mydata
         mydata.clear()
         
-        if os.path.exists("attendance.csv"):
+        # Try multiple possible locations
+        csv_paths = [
+            "attendance.csv",
+            os.path.join(os.path.dirname(__file__), "attendance.csv"),
+            r"C:\Users\Dell\Desktop\PYTHON\src\attendance.csv"
+        ]
+        
+        csv_file = None
+        for path in csv_paths:
+            if os.path.exists(path):
+                csv_file = path
+                break
+        
+        if csv_file:
             try:
-                with open("attendance.csv", "r") as f:
+                with open(csv_file, "r") as f:
                     csvread = csv.reader(f)
-                    next(csvread, None)  # Skip header
+                    header = next(csvread, None)  # Read header
+                    
                     for row in csvread:
-                        if row:  # Skip empty rows
-                            mydata.append(row)
+                        if row and len(row) >= 7:  # Skip empty rows
+                            # Reorder columns: CSV has Time,Date but code expects Date,Time
+                            # CSV format: StudentID,Name,Roll,Department,Time,Date,Status
+                            # Code expects: StudentID,Name,Roll,Department,Date,Time,Status
+                            reordered_row = [
+                                row[0],  # StudentID
+                                row[1],  # Name
+                                row[2],  # Roll
+                                row[3],  # Department
+                                row[5],  # Date (was at index 5)
+                                row[4],  # Time (was at index 4)
+                                row[6]   # Status
+                            ]
+                            mydata.append(reordered_row)
                 self.fetch_data(mydata)
+                print(f"Loaded {len(mydata)} records from {csv_file}")
             except Exception as e:
                 print(f"Error loading CSV: {e}")
+        else:
+            print("attendance.csv not found in any expected location")
 
     def import_csv(self):
         """Import CSV file"""

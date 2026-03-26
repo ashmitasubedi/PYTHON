@@ -40,11 +40,31 @@ class FaceRecognitionSystem:
         # Face detection parameters
         self.SCALE_FACTOR = 1.1
         self.MIN_NEIGHBORS = 5
-        self.CONFIDENCE_THRESHOLD = 50
+        self.CONFIDENCE_THRESHOLD = 86  # Increased from 50 to 70 for better accuracy
         
-        # File paths
-        self.HAARCASCADE_PATH = "haarcascade_frontalface_default.xml"
-        self.CLASSIFIER_PATH = "classifier.xml"
+        # ====== FIXED: Get absolute paths ======
+        # Get the directory where this script is located
+        self.BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        
+        # File paths - now using absolute paths
+        self.HAARCASCADE_PATH = os.path.join(self.BASE_DIR, "haarcascade_frontalface_default.xml")
+        self.CLASSIFIER_PATH = os.path.join(self.BASE_DIR, "classifier.xml")
+        self.ATTENDANCE_PATH = os.path.join(self.BASE_DIR, "attendance.csv")
+        
+        # Print paths for debugging
+        print("=" * 60)
+        print("FILE PATHS:")
+        print(f"Base Directory: {self.BASE_DIR}")
+        print(f"Haarcascade: {self.HAARCASCADE_PATH}")
+        print(f"Classifier: {self.CLASSIFIER_PATH}")
+        print(f"Attendance: {self.ATTENDANCE_PATH}")
+        print("=" * 60)
+        
+        # Check if files exist
+        print("\nFILE STATUS:")
+        print(f"Haarcascade exists: {os.path.exists(self.HAARCASCADE_PATH)}")
+        print(f"Classifier exists: {os.path.exists(self.CLASSIFIER_PATH)}")
+        print("=" * 60)
         
         # Camera variables
         self.video_capture = None
@@ -70,6 +90,7 @@ class FaceRecognitionSystem:
         self._create_title()
         self._create_video_panel()
         self._create_buttons()
+        self._create_debug_info()
     
     def _create_title(self):
         """Create and place the title label"""
@@ -117,40 +138,218 @@ class FaceRecognitionSystem:
             fg="white",
             justify="left"
         )
-        self.info_label.place(x=50, y=630, width=1430, height=100)
+        self.info_label.place(x=50, y=630, width=1430, height=60)
+    
+    def _create_debug_info(self):
+        """Create debug information panel"""
+        debug_text = f"Working Directory: {os.getcwd()}\n"
+        debug_text += f"Script Directory: {self.BASE_DIR}\n"
+        debug_text += f"Haarcascade: {'✓ Found' if os.path.exists(self.HAARCASCADE_PATH) else '✗ Missing'}\n"
+        debug_text += f"Classifier: {'✓ Found' if os.path.exists(self.CLASSIFIER_PATH) else '✗ Missing - Train model first'}"
+        
+        self.debug_label = Label(
+            self.root,
+            text=debug_text,
+            font=("Courier", 9),
+            bg="#0a0e27",
+            fg="#888888",
+            justify="left"
+        )
+        self.debug_label.place(x=50, y=695, width=1430, height=60)
     
     def _create_buttons(self):
         """Create control buttons"""
-        button_y = 500
+        button_frame = Frame(self.root, bg="#0a0e27")
+        button_frame.place(x=350, y=580, width=850, height=50)
         
         # Start button
         self.btn_start = Button(
-            self.root,
-            text="Start Recognition",
+            button_frame,
+            text="▶ Start Recognition",
             command=self.start_face_recognition,
             cursor="hand2",
-            font=("Times New Roman", 16, "bold"),
-            bg="#4a90e2",
+            font=("Times New Roman", 14, "bold"),
+            bg="#27ae60",
             fg="white",
-            activebackground="#357abd",
+            activebackground="#1e8449",
             activeforeground="white"
         )
-        self.btn_start.place(x=500, y=button_y, width=200, height=40)
+        self.btn_start.pack(side="left", padx=8, ipadx=15, ipady=5)
         
         # Stop button
         self.btn_stop = Button(
-            self.root,
-            text="Stop Recognition",
+            button_frame,
+            text="⬛ Stop Recognition",
             command=self.stop_face_recognition,
             cursor="hand2",
-            font=("Times New Roman", 16, "bold"),
-            bg="#e24a4a",
+            font=("Times New Roman", 14, "bold"),
+            bg="#e74c3c",
             fg="white",
-            activebackground="#bd3737",
+            activebackground="#c0392b",
             activeforeground="white",
             state="disabled"
         )
-        self.btn_stop.place(x=720, y=button_y, width=200, height=40)
+        self.btn_stop.pack(side="left", padx=8, ipadx=15, ipady=5)
+        
+        # Check Files button
+        self.btn_check = Button(
+            button_frame,
+            text="🔍 Check Files",
+            command=self.check_files,
+            cursor="hand2",
+            font=("Times New Roman", 14, "bold"),
+            bg="#3498db",
+            fg="white",
+            activebackground="#2980b9",
+            activeforeground="white"
+        )
+        self.btn_check.pack(side="left", padx=8, ipadx=15, ipady=5)
+        
+        # Settings button
+        self.btn_settings = Button(
+            button_frame,
+            text="⚙ Settings",
+            command=self.show_settings,
+            cursor="hand2",
+            font=("Times New Roman", 14, "bold"),
+            bg="#9b59b6",
+            fg="white",
+            activebackground="#8e44ad",
+            activeforeground="white"
+        )
+        self.btn_settings.pack(side="left", padx=8, ipadx=15, ipady=5)
+    
+    def check_files(self):
+        """Check if required files exist and show detailed info"""
+        message = "FILE CHECK RESULTS:\n\n"
+        
+        # Check haarcascade
+        if os.path.exists(self.HAARCASCADE_PATH):
+            message += f"✓ Haarcascade file found\n  Path: {self.HAARCASCADE_PATH}\n\n"
+        else:
+            message += f"✗ Haarcascade file NOT FOUND\n  Expected path: {self.HAARCASCADE_PATH}\n"
+            message += f"  Download from: https://github.com/opencv/opencv/tree/master/data/haarcascades\n\n"
+        
+        # Check classifier
+        if os.path.exists(self.CLASSIFIER_PATH):
+            message += f"✓ Classifier file found\n  Path: {self.CLASSIFIER_PATH}\n\n"
+        else:
+            message += f"✗ Classifier file NOT FOUND\n  Expected path: {self.CLASSIFIER_PATH}\n"
+            message += f"  You need to train the model first using the training module\n\n"
+        
+        # Check current directory contents
+        message += f"\nFILES IN CURRENT DIRECTORY ({self.BASE_DIR}):\n"
+        try:
+            files = os.listdir(self.BASE_DIR)
+            xml_files = [f for f in files if f.endswith('.xml')]
+            if xml_files:
+                message += "XML Files found:\n"
+                for f in xml_files:
+                    message += f"  - {f}\n"
+            else:
+                message += "  No XML files found in this directory\n"
+        except Exception as e:
+            message += f"  Error reading directory: {e}\n"
+        
+        messagebox.showinfo("File Check", message, parent=self.root)
+    
+    def show_settings(self):
+        """Show settings dialog to adjust confidence threshold"""
+        from tkinter import Toplevel, Scale, HORIZONTAL
+        
+        settings_window = Toplevel(self.root)
+        settings_window.title("Recognition Settings")
+        settings_window.geometry("500x300+500+300")
+        settings_window.configure(bg="#1a1e37")
+        settings_window.resizable(False, False)
+        
+        # Title
+        title = Label(
+            settings_window,
+            text="⚙ Recognition Settings",
+            font=("Arial", 18, "bold"),
+            bg="#1a1e37",
+            fg="white"
+        )
+        title.pack(pady=20)
+        
+        # Info label
+        info = Label(
+            settings_window,
+            text="Adjust the confidence threshold to improve accuracy\n\n"
+                 "Higher values = More strict (fewer false positives)\n"
+                 "Lower values = More lenient (may recognize wrong faces)",
+            font=("Arial", 10),
+            bg="#1a1e37",
+            fg="#cccccc",
+            justify="left"
+        )
+        info.pack(pady=10)
+        
+        # Current threshold label
+        current_label = Label(
+            settings_window,
+            text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}%",
+            font=("Arial", 12, "bold"),
+            bg="#1a1e37",
+            fg="#4ae24a"
+        )
+        current_label.pack(pady=10)
+        
+        # Slider
+        def update_threshold(val):
+            self.CONFIDENCE_THRESHOLD = int(val)
+            current_label.config(text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}%")
+            
+            # Visual feedback
+            if int(val) < 60:
+                current_label.config(fg="#e74c3c")  # Red - too lenient
+                recommendation.config(text="⚠ Warning: Low threshold may cause false recognitions")
+            elif int(val) < 75:
+                current_label.config(fg="#f39c12")  # Orange - moderate
+                recommendation.config(text="✓ Moderate threshold - balanced accuracy")
+            else:
+                current_label.config(fg="#4ae24a")  # Green - strict
+                recommendation.config(text="✓ High threshold - strict recognition")
+        
+        slider = Scale(
+            settings_window,
+            from_=30,
+            to=95,
+            orient=HORIZONTAL,
+            command=update_threshold,
+            length=350,
+            bg="#1a1e37",
+            fg="white",
+            troughcolor="#0a0e27",
+            highlightthickness=0,
+            font=("Arial", 10)
+        )
+        slider.set(self.CONFIDENCE_THRESHOLD)
+        slider.pack(pady=10)
+        
+        # Recommendation label
+        recommendation = Label(
+            settings_window,
+            text="✓ High threshold - strict recognition",
+            font=("Arial", 9, "italic"),
+            bg="#1a1e37",
+            fg="#4ae24a"
+        )
+        recommendation.pack(pady=5)
+        
+        # Close button
+        close_btn = Button(
+            settings_window,
+            text="Save & Close",
+            command=settings_window.destroy,
+            font=("Arial", 12, "bold"),
+            bg="#27ae60",
+            fg="white",
+            cursor="hand2",
+            activebackground="#1e8449"
+        )
+        close_btn.pack(pady=15, ipadx=20, ipady=5)
     
     @contextmanager
     def _get_db_connection(self):
@@ -227,92 +426,99 @@ class FaceRecognitionSystem:
     def _draw_face_boundary(self, img, classifier, clf):
         """
         Detect faces and draw bounding boxes with student information
-        
+ 
         Args:
             img: Input image frame
             classifier: Haar Cascade classifier for face detection
             clf: LBPH face recognizer
-            
+ 
         Returns:
             tuple: (processed_image, detection_info_text)
         """
         detection_info = []
-        
+ 
         try:
-            # Convert to grayscale for better face detection
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            
-            # Detect faces in the image
+ 
             faces = classifier.detectMultiScale(
                 gray_image,
                 scaleFactor=1.1,
                 minNeighbors=5,
                 minSize=(30, 30)
             )
-            
+ 
             if len(faces) > 0:
                 detection_info.append(f"✓ Detected {len(faces)} face(s)")
-            
+ 
             for (x, y, w, h) in faces:
                 try:
-                    # Extract face region for recognition
                     face_roi = gray_image[y:y + h, x:x + w]
-                    
-                    # Predict the face ID and confidence
+ 
+                    # LBPH predict() returns (label, distance)
+                    # LOWER distance = BETTER match  (0 = perfect, 100+ = poor)
+                    # FIXED: removed broken formula (1 - prediction/300)
                     student_id, prediction = clf.predict(face_roi)
-                    
-                    # Calculate confidence percentage (higher is better)
-                    confidence = int(100 * (1 - prediction / 300))
-                    
-                    # Check if confidence meets threshold
-                    if confidence > self.CONFIDENCE_THRESHOLD:
-                        # Fetch student information from database
+ 
+                    print(f"Face detected - ID: {student_id}, LBPH Distance: {prediction:.1f}")
+ 
+                    if prediction < 50:
+                        # ✅ HIGH CONFIDENCE — strict match, mark attendance
+                        confidence = int(100 * (1 - prediction / 100))
                         student_info = self._fetch_student_info(student_id)
-                        
+ 
                         if student_info:
-                            # Draw green rectangle for recognized face
                             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)
-                            
-                            # Display student information above the face
-                            self._draw_text(img, f"Name: {student_info['name']}", x, y - 75)
-                            self._draw_text(img, f"Roll: {student_info['roll_no']}", x, y - 55)
-                            self._draw_text(img, f"Dept: {student_info['department']}", x, y - 35)
-                            self._draw_text(img, f"Confidence: {confidence}%", x, y - 15)
-                            self.mark_attendence(student_id, student_info['roll_no'], student_info['department'], student_info['name'])
-
-                            
+                            text_y_start = y + h + 25
+                            self._draw_text(img, f"Name: {student_info['name']}",       x, text_y_start)
+                            self._draw_text(img, f"Roll: {student_info['roll_no']}",    x, text_y_start + 25)
+                            self._draw_text(img, f"Dept: {student_info['department']}", x, text_y_start + 50)
+                            self._draw_text(img, f"Confidence: {confidence}%",          x, text_y_start + 75)
+                            self.mark_attendence(
+                                student_id,
+                                student_info['roll_no'],
+                                student_info['department'],
+                                student_info['name']
+                            )
                             detection_info.append(
                                 f"✓ Recognized: {student_info['name']} "
-                                f"(ID: {student_id}, Confidence: {confidence}%)"
+                                f"(ID: {student_id}, Distance: {prediction:.1f})"
                             )
                         else:
-                            # Student ID not found in database
                             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 165, 255), 3)
-                            self._draw_text(img, f"ID {student_id} Not in DB", x, y - 35)
-                            self._draw_text(img, f"Confidence: {confidence}%", x, y - 15)
-                           
-                            
+                            text_y_start = y + h + 25
+                            self._draw_text(img, f"ID {student_id} Not in DB", x, text_y_start)
+                            self._draw_text(img, f"Distance: {prediction:.1f}",  x, text_y_start + 25)
                             detection_info.append(
                                 f"⚠ Face detected (ID: {student_id}) but not in database"
                             )
-                    else:
-                        # Low confidence - unknown face
-                        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)
-                        self._draw_text(img, "Unknown Face", x, y - 55)
-                        self._draw_text(img, f"ID: {student_id}", x, y - 35)
-                        self._draw_text(img, f"Confidence: {confidence}%", x, y - 15)
-                        
+ 
+                    elif prediction < 80:
+                        # ⚠ UNCERTAIN — possible match, not confident enough
+                        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 165, 255), 3)
+                        text_y_start = y + h + 25
+                        self._draw_text(img, "Uncertain Match",             x, text_y_start)
+                        self._draw_text(img, f"Distance: {prediction:.1f}", x, text_y_start + 25)
                         detection_info.append(
-                            f"✗ Low confidence: {confidence}% (threshold: {self.CONFIDENCE_THRESHOLD}%)"
+                            f"⚠ Uncertain: Distance {prediction:.1f} (need < 50 to recognize)"
                         )
-                
+ 
+                    else:
+                        # ✗ UNKNOWN FACE — too different from any trained face
+                        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 3)
+                        text_y_start = y + h + 25
+                        self._draw_text(img, "Unknown Face",                x, text_y_start)
+                        self._draw_text(img, f"Distance: {prediction:.1f}", x, text_y_start + 25)
+                        detection_info.append(
+                            f"✗ Unknown face: Distance {prediction:.1f} (too high)"
+                        )
+ 
                 except Exception as e:
                     print(f"Error processing face at ({x}, {y}): {e}")
                     continue
-            
+ 
             info_text = "\n".join(detection_info) if detection_info else "No faces detected"
             return img, info_text
-            
+ 
         except Exception as e:
             print(f"Error in face boundary detection: {e}")
             return img, f"Error: {str(e)}"
@@ -380,16 +586,23 @@ class FaceRecognitionSystem:
         if not os.path.exists(self.HAARCASCADE_PATH):
             messagebox.showerror(
                 "File Not Found",
-                f"Haar Cascade file not found: {self.HAARCASCADE_PATH}\n\n"
-                f"Please download it from OpenCV GitHub repository."
+                f"Haar Cascade file not found!\n\n"
+                f"Expected location:\n{self.HAARCASCADE_PATH}\n\n"
+                f"Current directory:\n{os.getcwd()}\n\n"
+                f"Please ensure the file is in the same directory as this script.\n\n"
+                f"Download from:\nhttps://github.com/opencv/opencv/tree/master/data/haarcascades",
+                parent=self.root
             )
             return
         
         if not os.path.exists(self.CLASSIFIER_PATH):
             messagebox.showerror(
                 "File Not Found",
-                f"Classifier file not found: {self.CLASSIFIER_PATH}\n"
-                "Please train the model first."
+                f"Classifier file not found!\n\n"
+                f"Expected location:\n{self.CLASSIFIER_PATH}\n\n"
+                "You need to train the model first before running face recognition.\n"
+                "Please run the training module to generate classifier.xml",
+                parent=self.root
             )
             return
         
@@ -400,7 +613,9 @@ class FaceRecognitionSystem:
             if self.face_cascade.empty():
                 messagebox.showerror(
                     "Classifier Error",
-                    "Failed to load Haar Cascade classifier. File may be corrupted."
+                    "Failed to load Haar Cascade classifier. File may be corrupted.\n"
+                    "Try re-downloading the file.",
+                    parent=self.root
                 )
                 return
             
@@ -412,7 +627,7 @@ class FaceRecognitionSystem:
             self.video_capture = cv2.VideoCapture(0)
             
             if not self.video_capture.isOpened():
-                messagebox.showerror("Camera Error", "Could not access the camera")
+                messagebox.showerror("Camera Error", "Could not access the camera", parent=self.root)
                 return
             
             # Update status
@@ -420,6 +635,7 @@ class FaceRecognitionSystem:
             self.status_label.configure(text="Status: Camera Active - Recognizing Faces", fg="#4ae24a")
             self.btn_start.configure(state="disabled")
             self.btn_stop.configure(state="normal")
+            self.btn_check.configure(state="disabled")
             
             # Start processing in a separate thread
             self.processing_thread = threading.Thread(target=self._process_frame, daemon=True)
@@ -428,7 +644,7 @@ class FaceRecognitionSystem:
             print("Face recognition started.")
             
         except Exception as e:
-            messagebox.showerror("Error", f"An error occurred during initialization: {str(e)}")
+            messagebox.showerror("Error", f"An error occurred during initialization:\n\n{str(e)}", parent=self.root)
             print(f"Error details: {e}")
     
     def stop_face_recognition(self):
@@ -451,46 +667,39 @@ class FaceRecognitionSystem:
         # Update buttons
         self.btn_start.configure(state="normal")
         self.btn_stop.configure(state="disabled")
+        self.btn_check.configure(state="normal")
         
         print("Face recognition stopped.")
 
     def mark_attendence(self, student_id, roll, department, name):
-       
-
-        file_path = "attendance.csv"
-
-        # Create file if missing
-        if not os.path.exists(file_path):
-            with open(file_path, "w") as f:
-                f.write("StudentID,Name,Roll,Department,Time,Date,Status")
-
-        # Read existing attendance
-        with open(file_path, "r") as f:
-            data = f.readlines()
-            existing = []
-            for line in data:
+        """Mark student attendance in CSV file"""
+        # FIXED: header ends with \n so first data row is not glued to it
+        if not os.path.exists(self.ATTENDANCE_PATH):
+            with open(self.ATTENDANCE_PATH, "w") as f:
+                f.write("StudentID,Name,Roll,Department,Time,Date,Status\n")
+ 
+        # FIXED: use set() for O(1) duplicate lookup
+        existing = set()
+        with open(self.ATTENDANCE_PATH, "r") as f:
+            lines = f.readlines()
+            for line in lines[1:]:   # skip header
                 values = line.strip().split(",")
                 if len(values) >= 6:
-                    existing.append((values[0], values[5]))  # (student_id, date)
-
-        now = datetime.now()
+                    existing.add((values[0], values[5]))  # (student_id, date)
+ 
+        now        = datetime.now()
         date_today = now.strftime("%d/%m/%Y")
-        time_now = now.strftime("%H:%M:%S")
-
-        # Check duplicate attendance
+        time_now   = now.strftime("%H:%M:%S")
+ 
         if (str(student_id), date_today) in existing:
             print(f"Attendance already marked today for ID: {student_id}")
             return
-
-        # Append attendance
-        with open(file_path, "a") as f:
-            f.write(f"\n{student_id},{name},{roll},{department},{time_now},{date_today},Present")
-
-        print(f"Attendance marked: {student_id} - {name}")
-
-
-
-
+ 
+        # FIXED: \n at END of line, not beginning
+        with open(self.ATTENDANCE_PATH, "a") as f:
+            f.write(f"{student_id},{name},{roll},{department},{time_now},{date_today},Present\n")
+ 
+        print(f"✓ Attendance marked: {student_id} - {name} at {time_now}")
 
 def main():
     """Main entry point for the application"""
