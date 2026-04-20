@@ -9,6 +9,7 @@ from FaceRecognization import FaceRecognitionSystem
 import tkinter.messagebox
 import tkinter.messagebox as messagebox
 from help import Help
+from attendenceab import AbsentStudentSystem
 from time import strftime
 from datetime import datetime
 
@@ -162,11 +163,11 @@ class Face_Recognition_System:
                 'row': 1, 'col': 1
             },
             {
-                'text': 'DEVELOPER',
+                'text': 'Absent students',
                 'icon': '👨‍💻',
                 'color': '#607d8b',
                 'hover': '#455a64',
-                'command': self.developer,
+                'command': self.absent,
                 'row': 1, 'col': 2
             },
             {
@@ -321,9 +322,10 @@ class Face_Recognition_System:
         print("Train Data clicked")
 
 
-    def developer(self):
-        self.show_notification("Developer Information...", "#607d8b")
-        print("Developer clicked")
+    def absent(self):
+        self.__new__window=Toplevel(self.root)
+        self.app=AbsentStudentSystem(self.__new__window)
+        print("absent clicked")
 
     def exit_app(self):
         self.iExit= tkinter.messagebox.askyesno("Face Recognition","Are you sure you want to exit",parent=self.root)

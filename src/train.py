@@ -258,7 +258,8 @@ class train:
     
     def _on_mousewheel(self, event):
         """Handle mouse wheel scrolling"""
-        self.main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        if self.main_canvas.winfo_exists():
+            self.main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
     
     def _on_frame_configure(self, event):
         """Update scroll region when frame size changes"""

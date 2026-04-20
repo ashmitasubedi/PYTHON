@@ -75,6 +75,7 @@ class FaceRecognitionSystem:
         # Error tracking
         self.last_error_time = 0
         self.ERROR_COOLDOWN = 5
+        self.marked_today = set()
         
         # Setup UI after variables are initialized
         self._setup_ui()
@@ -405,7 +406,7 @@ class FaceRecognitionSystem:
         try:
             with self._get_db_connection() as (conn, cursor):
                 query = """
-                    SELECT name, roll_no, department 
+                    SELECT name, roll_no, department, course
                     FROM student 
                     WHERE student_id = %s
                 """
@@ -416,11 +417,13 @@ class FaceRecognitionSystem:
                     return {
                         'name': result[0],
                         'roll_no': result[1],
-                        'department': result[2]
+                        'department': result[2],
+                        'course': result[3]
                     }
                 return None
         except Exception as e:
             print(f"Error fetching student info: {e}")
+            self._show_error_throttled("Database Error", str(e))
             return None
     
     def _draw_face_boundary(self, img, classifier, clf):
@@ -443,10 +446,10 @@ class FaceRecognitionSystem:
             faces = classifier.detectMultiScale(
                 gray_image,
                 scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30, 30)
-            )
- 
+                minNeighbors=6,
+                minSize=(100, 100)
+             )
+            
             if len(faces) > 0:
                 detection_info.append(f"✓ Detected {len(faces)} face(s)")
  
@@ -461,12 +464,12 @@ class FaceRecognitionSystem:
  
                     print(f"Face detected - ID: {student_id}, LBPH Distance: {prediction:.1f}")
  
-                    if prediction < 50:
+                    if prediction < 60:
                         # ✅ HIGH CONFIDENCE — strict match, mark attendance
-                        confidence = int(100 * (1 - prediction / 100))
+                        confidence = max(0, min(100, int(100 - prediction)))
                         student_info = self._fetch_student_info(student_id)
  
-                        if student_info:
+                        if student_info and prediction < 70:
                             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)
                             text_y_start = y + h + 25
                             self._draw_text(img, f"Name: {student_info['name']}",       x, text_y_start)
@@ -477,7 +480,8 @@ class FaceRecognitionSystem:
                                 student_id,
                                 student_info['roll_no'],
                                 student_info['department'],
-                                student_info['name']
+                                student_info['name'],
+                                student_info['course']
                             )
                             detection_info.append(
                                 f"✓ Recognized: {student_info['name']} "
@@ -492,14 +496,14 @@ class FaceRecognitionSystem:
                                 f"⚠ Face detected (ID: {student_id}) but not in database"
                             )
  
-                    elif prediction < 80:
+                    elif 60 <= prediction < 80:
                         # ⚠ UNCERTAIN — possible match, not confident enough
                         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 165, 255), 3)
                         text_y_start = y + h + 25
                         self._draw_text(img, "Uncertain Match",             x, text_y_start)
                         self._draw_text(img, f"Distance: {prediction:.1f}", x, text_y_start + 25)
                         detection_info.append(
-                            f"⚠ Uncertain: Distance {prediction:.1f} (need < 50 to recognize)"
+                            f"⚠ Uncertain: Distance {prediction:.1f} (threshold: {self.CONFIDENCE_THRESHOLD})"
                         )
  
                     else:
@@ -568,13 +572,11 @@ class FaceRecognitionSystem:
                 # Convert to PhotoImage
                 img = Image.fromarray(frame_resized)
                 imgtk = ImageTk.PhotoImage(image=img)
-                
+                self.video_label.imgtk = imgtk # Keep reference to avoid garbage collection
                 # Update the video label
-                self.video_label.imgtk = imgtk
-                self.video_label.configure(image=imgtk, text="")
-                
-                # Update info label
-                self.info_label.configure(text=info_text)
+                self.root.after(0, lambda: self.video_label.configure(image=imgtk, text=""))
+                self.root.after(0, lambda: self.info_label.configure(text=info_text))
+                # Keep reference to avoid garbage collection
                 
             except Exception as e:
                 print(f"Error in frame processing: {e}")
@@ -653,6 +655,7 @@ class FaceRecognitionSystem:
         
         if self.video_capture is not None:
             self.video_capture.release()
+            cv2.destroyAllWindows()
         
         # Reset video label
         self.video_label.configure(
@@ -671,36 +674,60 @@ class FaceRecognitionSystem:
         
         print("Face recognition stopped.")
 
-    def mark_attendence(self, student_id, roll, department, name):
+    def mark_attendence(self, student_id, roll, department, name, course):
         """Mark student attendance in CSV file"""
-        # FIXED: header ends with \n so first data row is not glued to it
+        import time
+        current_time = time.time()
+
+        # Throttle per student_id
+        if not hasattr(self, "last_mark_time"):
+            self.last_mark_time = {}
+
+        last_time = self.last_mark_time.get(str(student_id), 0)
+        if current_time - last_time < 5:
+            return
+
+        self.last_mark_time[str(student_id)] = current_time
+
+        # Create file with UPDATED header
         if not os.path.exists(self.ATTENDANCE_PATH):
             with open(self.ATTENDANCE_PATH, "w") as f:
-                f.write("StudentID,Name,Roll,Department,Time,Date,Status\n")
- 
-        # FIXED: use set() for O(1) duplicate lookup
+                f.write("StudentID,Name,Roll,Department,Course,Time,Date,Status\n")
+
+        # Read existing records (updated index for date)
         existing = set()
         with open(self.ATTENDANCE_PATH, "r") as f:
             lines = f.readlines()
-            for line in lines[1:]:   # skip header
+            for line in lines[1:]:
                 values = line.strip().split(",")
-                if len(values) >= 6:
-                    existing.add((values[0], values[5]))  # (student_id, date)
- 
-        now        = datetime.now()
+                if len(values) >= 7:
+                    # index 6 = Date (after adding Course)
+                    existing.add((values[0], values[6]))
+
+        now = datetime.now()
         date_today = now.strftime("%d/%m/%Y")
-        time_now   = now.strftime("%H:%M:%S")
- 
-        if (str(student_id), date_today) in existing:
-            print(f"Attendance already marked today for ID: {student_id}")
+        time_now = now.strftime("%H:%M:%S")
+
+        #  Prevent duplicate attendance (same student + same day + same course optional)
+        if (str(student_id), date_today) in existing or str(student_id) in self.marked_today:
+            print(f"⚠ Attendance already marked today for: {name} (ID: {student_id})")
+            self.root.after(0, lambda: self.info_label.configure(
+                text=f"✓ {name} — Attendance already marked today"
+            ))
             return
- 
-        # FIXED: \n at END of line, not beginning
+
+        # Write with COURSE included
         with open(self.ATTENDANCE_PATH, "a") as f:
-            f.write(f"{student_id},{name},{roll},{department},{time_now},{date_today},Present\n")
- 
+            f.write(f"{student_id},{name},{roll},{department},{course},{time_now},{date_today},Present\n")
+
+        self.marked_today.add(str(student_id))
+
         print(f"✓ Attendance marked: {student_id} - {name} at {time_now}")
 
+        # UI update
+        self.root.after(0, lambda: self.info_label.configure(
+            text=f"✅ Attendance Marked!\nName: {name}\nCourse: {course}\nTime: {time_now}"
+        ))
 def main():
     """Main entry point for the application"""
     root = Tk()
