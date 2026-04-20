@@ -1,2 +1,38 @@
-StudentID,Name,Roll,Department,Time,Date,Status
-12,ashmita subedi,18,IT,10:07:40,12/12/2025,Present
+StudentID,Name,Roll,Department,Course,Time,Date,Status
+12,ashmita subedi,18,IT,,10:07:40,12/12/2025,Present
+12,ashmita subedi,18,IT,,21:26:02,20/12/2025,Present
+7,sajan,7,Commerce,,21:26:07,20/12/2025,Present
+12,ashmita subedi,18,IT,,15:05:45,19/01/2026,Present
+12,ashmita subedi,18,IT,,10:07:40,12/12/2025,Present
+12,ashmita subedi,18,IT,,21:26:02,20/12/2025,Present
+7,sajan,7,Commerce,,21:26:07,20/12/2025,Present
+12,ashmita subedi,18,IT,,15:05:45,19/01/2026,Present
+12,ashmita subedi,18,IT,,12:56:38,21/01/2026,Present
+222,cillian murphy,11,Arts,,16:03:25,21/01/2026,Present
+12,ashmita subedi,18,IT,,11:02:35,26/03/2026,Present
+222,cillian murphy,11,Arts,,11:02:38,26/03/2026,Present
+12,ashmita subedi,18,IT,,11:48:30,28/03/2026,Present
+222,cillian murphy,11,Arts,,11:48:34,28/03/2026,Present
+12,ashmita subedi,18,IT,,14:18:02,29/03/2026,Present
+222,cillian murphy,11,Arts,,14:19:05,29/03/2026,Present
+12,ashmita subedi,18,IT,,18:16:15,30/03/2026,Present
+12,ashmita subedi,18,IT,,12:15:19,9/4/2026,Present
+19,IKITA SHRESTHA,19,IT,,12:15:19,9/4/2026,Present
+222,cillian murphy,11,Arts,,12:15:36,9/4/2026,Present
+20,Anupa ,20,IT,,12:23:29,9/4/2026,Present
+14,sacheeta,14,Science,,12:30:46,9/4/2026,Present
+14,sacheeta,14,Science,,10:54:39,10/4/2026,Present
+12,ashmita subedi,18,IT,,10:54:39,10/4/2026,Present
+20,Anupa ,20,IT,,10:55:05,10/4/2026,Present
+222,cillian murphy,11,Arts,,10:57:30,10/4/2026,Present
+12,ashmita subedi,18,IT,,11:12:15,11/4/2026,Present
+14,sacheeta,14,Science,,11:15:21,11/4/2026,Present
+222,cillian murphy,11,Arts,,11:15:22,11/4/2026,Present
+68,katrina,12,Arts,,12:09:03,11/4/2026,Present
+68,katrina,12,Arts,,18:22:57,12/4/2026,Present
+12,ashmita subedi,18,IT,,18:22:59,12/4/2026,Present
+68,katrina,12,Arts,,12:52:42,17/04/2026,Present
+12,ashmita subedi,18,IT,,12:52:43,17/04/2026,Present
+14,sacheeta,14,Science,BSC-CSIT,13:31:20,17/04/2026,Present
+12,ashmita subedi,18,IT,BCA,16:47:07,18/04/2026,Present
+12,ashmita subedi,18,IT,BCA,11:26:20,19/04/2026,Present
