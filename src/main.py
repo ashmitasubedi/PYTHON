@@ -2,10 +2,16 @@ from tkinter import *
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageDraw, ImageFilter
 import os
+from attendence import AttendanceSystem
 from student import Student
 from train import train
 from FaceRecognization import FaceRecognitionSystem
-
+import tkinter.messagebox
+import tkinter.messagebox as messagebox
+from help import Help
+from attendenceab import AbsentStudentSystem
+from time import strftime
+from datetime import datetime
 
 class Face_Recognition_System:
     def __init__(self, root):#CONSTUUCTOR CALLED root represents the main Tkinter window
@@ -35,36 +41,76 @@ class Face_Recognition_System:
         # Create gradient background
         self.create_gradient_bg()
         
-        # ========= Header Section =========
         header_frame = Frame(self.root, bg="#1a1f3a", height=100)
         header_frame.place(x=0, y=0, width=1530, height=100)
-        
+
         # Add shadow effect to header
         shadow = Frame(self.root, bg="#000000", height=3)
         shadow.place(x=0, y=100, width=1530, height=3)
-        
-        # Title with icon
+
+        # Title container (LEFT SIDE)
         title_frame = Frame(header_frame, bg="#1a1f3a")
-        title_frame.place(relx=0.5, rely=0.5, anchor=CENTER)
-        
-        title_lbl = Label(title_frame,
-                         text="🎯 FACE RECOGNITION ATTENDANCE SYSTEM",
-                         font=("Segoe UI", 36, "bold"),
-                         bg="#1a1f3a", 
-                         fg="#ffffff")
+        title_frame.place(x=50, y=20)  # Changed to absolute positioning
+
+        # Main Title
+        title_lbl = Label(
+            title_frame,
+            text="🎯 FACE RECOGNITION ATTENDANCE SYSTEM",
+            font=("Segoe UI", 36, "bold"),
+            bg="#1a1f3a",
+            fg="#ffffff"
+        )
         title_lbl.pack()
-        
-        subtitle_lbl = Label(title_frame,
-                            text="Advanced AI-Powered Recognition & Tracking",
-                            font=("Segoe UI", 12),
-                            bg="#1a1f3a", 
-                            fg="#b8bcc8")
+
+        # Subtitle
+        subtitle_lbl = Label(
+            title_frame,
+            text="Advanced AI-Powered Recognition & Tracking",
+            font=("Segoe UI", 12),
+            bg="#1a1f3a",
+            fg="#b8bcc8"
+        )
         subtitle_lbl.pack()
 
-        # ========= Main Content Area =========
+        # CLOCK SECTION (RIGHT SIDE) -
+        # Create clock frame
+        clock_frame = Frame(header_frame, bg="#2a3f5a", bd=2, relief=RIDGE)
+        clock_frame.place(x=1150, y=20, width=220, height=60)
+
+        # Time label
+        self.time_label = Label(
+            clock_frame,
+            text="00:00:00 AM",
+            font=("Digital-7", 18, "bold"),  # Digital font style
+            bg="#2a3f5a",
+            fg="#00ff00"  # Bright green like digital clock
+        )
+        self.time_label.pack(pady=2)
+
+        # Date label
+        self.date_label = Label(
+            clock_frame,
+            text="01-01-2025",
+            font=("Segoe UI", 10),
+            bg="#2a3f5a",
+            fg="#ffffff"
+        )
+        self.date_label.pack()
+
+        # Clock update function
+        def update_clock():
+            time_string = strftime('%I:%M:%S %p')
+            date_string = strftime('%d-%m-%Y')
+            self.time_label.config(text=time_string)
+            self.date_label.config(text=date_string)
+            self.time_label.after(1000, update_clock)
+
+        # Start the clock
+        update_clock()
+            # ========= Main Content Area =========
         #All the big modern buttons appear inside this frame.
         content_frame = Frame(self.root, bg=self.colors['bg_dark'])
-        content_frame.place(x=100, y=140, width=1330, height=600)
+        content_frame.place(x=50, y=100, width=1330, height=600)
 
         # Button data with colors
         self.buttons_data = [
@@ -117,11 +163,11 @@ class Face_Recognition_System:
                 'row': 1, 'col': 1
             },
             {
-                'text': 'DEVELOPER',
+                'text': 'Absent students',
                 'icon': '👨‍💻',
                 'color': '#607d8b',
                 'hover': '#455a64',
-                'command': self.developer,
+                'command': self.absent,
                 'row': 1, 'col': 2
             },
             {
@@ -140,11 +186,11 @@ class Face_Recognition_System:
 
         # ========= Footer =========
         footer = Label(self.root,
-                      text="© 2025 Face Recognition System | Powered by Advanced AI Technology",
+                      text="© 2025 Face Recognition System | Powered by Advanced AI Technology ",
                       font=("Segoe UI", 10),
                       bg=self.colors['bg_dark'],
                       fg=self.colors['text_secondary'])
-        footer.place(x=0, y=760, width=1530, height=30)
+        footer.place(x=0, y=90, width=1530, height=40)
 
     def create_gradient_bg(self):
         """Create a gradient background effect"""
@@ -245,7 +291,13 @@ class Face_Recognition_System:
         self.__new__window=Toplevel(self.root)
         self.app=Student(self.__new__window)    
         self.show_notification("Opening Student Details...", "#4a90e2")
-        print("Student Details clicked")    
+        print("Student Details clicked") 
+
+    def photos(self):
+        folder_path1= r"C:\Users\Dell\Desktop\PYTHON\src\data"
+        os.startfile(folder_path1)
+        self.show_notification("Opening Photos Folder...", "#e91e63")
+        print("Photos clicked")
 
     def face_recognition(self):
         self.__new__window=Toplevel(self.root)
@@ -254,12 +306,15 @@ class Face_Recognition_System:
         print("Student Details clicked")    
 
     def attendance(self):
-        self.show_notification("Loading Attendance Records...", "#2ecc71")
+        self.show_notification("Opening Attendance Module...", "#2ecc71")
+        self.__new__window=Toplevel(self.root)
+        self.app=AttendanceSystem(self.__new__window)    
         print("Attendance clicked")
 
     def help_desk(self):
-        self.show_notification("Opening Help Desk...", "#f39c12")
-        print("Help Desk clicked")
+        self.__new__window=Toplevel(self.root)
+        self.app=Help(self.__new__window)
+        
 
     def train_data(self):
         self.__new__window=Toplevel(self.root)
@@ -267,16 +322,21 @@ class Face_Recognition_System:
         print("Train Data clicked")
 
 
-    def developer(self):
-        self.show_notification("Developer Information...", "#607d8b")
-        print("Developer clicked")
+    def absent(self):
+        self.__new__window=Toplevel(self.root)
+        self.app=AbsentStudentSystem(self.__new__window)
+        print("absent clicked")
 
     def exit_app(self):
-        self.show_notification("Shutting down system...", "#e74c3c")
-        self.root.after(1000, self.root.destroy)
+        self.iExit= tkinter.messagebox.askyesno("Face Recognition","Are you sure you want to exit",parent=self.root)
+        if self.iExit>0:
+            self.root.destroy()
+        else:
+            return
 #IMAGES 
     def open_img(self, path, size=None):
      os.startfile(path)
+    
 
 # Run program
 if __name__ == "__main__":
