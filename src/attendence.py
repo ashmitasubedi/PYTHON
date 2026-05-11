@@ -12,7 +12,6 @@ mydata = []
 # ─────────────────────────────────────────────────────────────────────────────
 #  DB HELPER  — returns (semester, year, course, department) for a student_id
 #  Returns ("", "", "", "") silently if DB is unreachable or student not found.
-# Takes student_id Fetches semester yearn course department If DB fails → returns empty values (no crash)
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_student_info_from_db(student_id):
     try:
@@ -31,6 +30,94 @@ def fetch_student_info_from_db(student_id):
     except Exception:
         pass
     return ("", "", "", "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  DATE NORMALIZER
+#  Converts any date string → "dd/mm/yyyy" (with leading zeros).
+#  Handles: "3/5/2026", "03/05/2026", "2026-05-03", "3/5/26", etc.
+#  Returns the original string unchanged if no format matches.
+# ─────────────────────────────────────────────────────────────────────────────
+def normalize_date(d):
+    if not d:
+        return ""
+    d = d.strip()
+    for fmt in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(d, fmt).strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+    # Last resort: handle single-digit day/month like "3/5/2026"
+    parts = d.replace("-", "/").split("/")
+    if len(parts) == 3:
+        try:
+            day, mon, yr = parts
+            if len(yr) == 2:
+                yr = "20" + yr
+            return datetime(int(yr), int(mon), int(day)).strftime("%d/%m/%Y")
+        except Exception:
+            pass
+    return d  # return as-is if nothing works
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CSV ROW PARSER
+#  Your CSV column order: StudentID | Name | Roll | Department | Course | Time | Date | Status
+#  Also handles old 9-col format with an extra semester column.
+#
+#  Returns: (sid, name, roll, dept, course, date_normalized, time_str, status)
+# ─────────────────────────────────────────────────────────────────────────────
+def parse_csv_row(row):
+    if not row or len(row) < 8:
+        return None
+    sid        = row[0].strip()
+    name       = row[1].strip()
+    roll       = row[2].strip()
+    dept_csv   = row[3].strip()
+    course_csv = row[4].strip()
+
+    # Detect column layout by checking if row[5] looks like a time (HH:MM:SS)
+    # Your CSV: col5=Time, col6=Date, col7=Status  (8-col)
+    # Old format: col5=Semester, col6=Date, col7=Time, col8=Status (9-col)
+    def looks_like_time(s):
+        s = s.strip()
+        return len(s) >= 5 and s[2:3] == ":" and s[:2].isdigit()
+
+    def looks_like_date(s):
+        s = s.strip()
+        return "/" in s or "-" in s
+
+    if len(row) >= 9:
+        # Could be old 9-col (sem, date, time, status) or new 9-col
+        if looks_like_time(row[5]):
+            # New format: time=row[5], date=row[6], status=row[7]
+            time_str = row[5].strip()
+            date_raw = row[6].strip()
+            status   = row[7].strip()
+        elif looks_like_time(row[7]):
+            # Old 9-col: sem=row[5], date=row[6], time=row[7], status=row[8]
+            time_str = row[7].strip()
+            date_raw = row[6].strip()
+            status   = row[8].strip() if len(row) > 8 else ""
+        else:
+            time_str = row[5].strip()
+            date_raw = row[6].strip()
+            status   = row[7].strip()
+    else:
+        # 8-col — determine if time or date is in col5
+        if looks_like_time(row[5]):
+            # Your actual CSV: time=row[5], date=row[6], status=row[7]
+            time_str = row[5].strip()
+            date_raw = row[6].strip()
+            status   = row[7].strip()
+        else:
+            # Assumed old format: date=row[5], time=row[6], status=row[7]
+            date_raw = row[5].strip()
+            time_str = row[6].strip()
+            status   = row[7].strip()
+
+    date_normalized = normalize_date(date_raw)
+    return (sid, name, roll, dept_csv, course_csv, date_normalized, time_str, status)
 
 
 class AttendanceSystem:
@@ -58,7 +145,7 @@ class AttendanceSystem:
         self.var_search_date       = StringVar()
         self._filtered_data        = []
 
-        # ── DEPARTMENT → COURSE MAPPING (mirrors student.py) ─────────
+        # ── DEPARTMENT → COURSE MAPPING ───────────────────────────────
         self.department_courses = {
             "Arts":     ("BA", "BFA", "BHM"),
             "IT":       ("BCA", "BIM"),
@@ -83,7 +170,6 @@ class AttendanceSystem:
         main_frame.pack(fill=BOTH, expand=True, padx=10, pady=5)
 
         # ── STATISTICS BAR ───────────────────────────────────────────
-        #  Shows total records, present count, absent count, and attendance rate.
         stats_frame = LabelFrame(
             main_frame, bd=2, bg=self.colors['bg_card'], relief=RIDGE,
             text="Attendance Statistics ",
@@ -101,8 +187,7 @@ class AttendanceSystem:
         body = Frame(main_frame, bg=self.colors['bg_dark'])
         body.pack(fill=BOTH, expand=True)
 
-        # ════ LEFT SIDE ══════════════════════════════════════════════
-        # ════ LEFT SIDEBAR (FIXED VERSION) ═══════════════════════════════
+        # ════ LEFT SIDEBAR ════════════════════════════════════════════
         Left_frame = LabelFrame(
             body, bd=2, bg=self.colors['bg_card'], relief=RIDGE,
             text="Search & Filter Controls",
@@ -110,13 +195,12 @@ class AttendanceSystem:
         )
         Left_frame.pack(side=LEFT, fill=Y, padx=(0, 6), pady=2)
 
-        # Use grid layout inside Left_frame
-        Left_frame.grid_rowconfigure(0, weight=0)  # Filter
-        Left_frame.grid_rowconfigure(1, weight=1)  # Details (expand)
-        Left_frame.grid_rowconfigure(2, weight=0)  # Buttons
+        Left_frame.grid_rowconfigure(0, weight=0)
+        Left_frame.grid_rowconfigure(1, weight=1)
+        Left_frame.grid_rowconfigure(2, weight=0)
         Left_frame.grid_columnconfigure(0, weight=1)
 
-        # ── FILTER SECTION ───────────────────────────────────────────────
+        # ── FILTER SECTION ───────────────────────────────────────────
         filter_lf = LabelFrame(
             Left_frame, bd=2, bg=self.colors['bg_card'], relief=RIDGE,
             text="Filter Options",
@@ -126,13 +210,11 @@ class AttendanceSystem:
 
         # Department
         Label(filter_lf, text="Department:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 11, "bold")
-            ).grid(row=0, column=0, padx=8, pady=6, sticky=W)
-
+              fg="white", font=("Helvetica", 11, "bold")
+              ).grid(row=0, column=0, padx=8, pady=6, sticky=W)
         self.dept_combo = ttk.Combobox(
             filter_lf, textvariable=self.var_search_department,
-            font=("Helvetica", 11), state="readonly", width=20
-        )
+            font=("Helvetica", 11), state="readonly", width=20)
         self.dept_combo["values"] = ("All Departments", "Arts", "IT", "Science", "Commerce")
         self.dept_combo.current(0)
         self.dept_combo.grid(row=0, column=1, padx=8, pady=6)
@@ -140,145 +222,121 @@ class AttendanceSystem:
 
         # Course
         Label(filter_lf, text="Course:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 11, "bold")
-            ).grid(row=1, column=0, padx=8, pady=6, sticky=W)
-
+              fg="white", font=("Helvetica", 11, "bold")
+              ).grid(row=1, column=0, padx=8, pady=6, sticky=W)
         self.course_combo = ttk.Combobox(
             filter_lf, textvariable=self.var_search_course,
-            font=("Helvetica", 11), state="readonly", width=20
-        )
+            font=("Helvetica", 11), state="readonly", width=20)
         self.course_combo["values"] = ("All Courses",)
         self.course_combo.current(0)
         self.course_combo.grid(row=1, column=1, padx=8, pady=6)
 
         # Semester
         Label(filter_lf, text="Semester:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 11, "bold")
-            ).grid(row=2, column=0, padx=8, pady=6, sticky=W)
-
+              fg="white", font=("Helvetica", 11, "bold")
+              ).grid(row=2, column=0, padx=8, pady=6, sticky=W)
         self.semester_combo = ttk.Combobox(
             filter_lf, textvariable=self.var_search_semester,
-            font=("Helvetica", 11), state="readonly", width=20
-        )
+            font=("Helvetica", 11), state="readonly", width=20)
         self.semester_combo["values"] = (
             "All Semesters", "Semester 1", "Semester 2", "Semester 3",
-            "Semester 4", "Semester 5", "Semester 6",
-            "Semester 7", "Semester 8"
-        )
+            "Semester 4", "Semester 5", "Semester 6", "Semester 7", "Semester 8")
         self.semester_combo.current(0)
         self.semester_combo.grid(row=2, column=1, padx=8, pady=6)
 
         # Year
         Label(filter_lf, text="Year:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 11, "bold")
-            ).grid(row=3, column=0, padx=8, pady=6, sticky=W)
-
+              fg="white", font=("Helvetica", 11, "bold")
+              ).grid(row=3, column=0, padx=8, pady=6, sticky=W)
         self.year_combo = ttk.Combobox(
             filter_lf, textvariable=self.var_search_year,
-            font=("Helvetica", 11), state="readonly", width=20
-        )
+            font=("Helvetica", 11), state="readonly", width=20)
         self.year_combo["values"] = (
-            "All Years", "2020-21", "2021-22", "2022-23",
-            "2023-24", "2024-25"
-        )
+            "All Years", "2020-21", "2021-22", "2022-23", "2023-24", "2024-25")
         self.year_combo.current(0)
         self.year_combo.grid(row=3, column=1, padx=8, pady=6)
 
         # Date
         Label(filter_lf, text="Date:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 11, "bold")
-            ).grid(row=4, column=0, padx=8, pady=6, sticky=W)
-
+              fg="white", font=("Helvetica", 11, "bold")
+              ).grid(row=4, column=0, padx=8, pady=6, sticky=W)
         date_frame = Frame(filter_lf, bg=self.colors['bg_card'])
         date_frame.grid(row=4, column=1, padx=8, pady=6, sticky=W)
-
         ttk.Entry(date_frame, width=12, textvariable=self.var_search_date,
-                font=("Helvetica", 11)).pack(side=LEFT)
-
+                  font=("Helvetica", 11)).pack(side=LEFT)
         Button(date_frame, text="Today", width=6,
-            bg=self.colors['bg_dark'], fg="white",
-            command=lambda: self.var_search_date.set(
-                strftime("%d/%m/%Y", localtime()))
-            ).pack(side=LEFT, padx=2)
-
+               bg=self.colors['bg_dark'], fg="white",
+               command=lambda: self.var_search_date.set(
+                   strftime("%d/%m/%Y", localtime()))
+               ).pack(side=LEFT, padx=2)
         Button(date_frame, text="Clear", width=6,
-            bg=self.colors['bg_dark'], fg="white",
-            command=lambda: self.var_search_date.set("")
-            ).pack(side=LEFT, padx=2)
+               bg=self.colors['bg_dark'], fg="white",
+               command=lambda: self.var_search_date.set("")
+               ).pack(side=LEFT, padx=2)
 
+        # Set today's date as default
         self.var_search_date.set(strftime("%d/%m/%Y", localtime()))
 
-        # Buttons
+        # Filter buttons
         btn_row = Frame(filter_lf, bg=self.colors['bg_card'])
         btn_row.grid(row=5, column=0, columnspan=2, pady=10)
-
         Button(btn_row, text="Apply Filters", width=14,
-            bg=self.colors['info'], fg="white",
-            command=self.apply_filters).pack(side=LEFT, padx=4)
-
+               bg=self.colors['info'], fg="white",
+               command=self.apply_filters).pack(side=LEFT, padx=4)
         Button(btn_row, text="Show All", width=10,
-            bg=self.colors['bg_dark'], fg="white",
-            command=self.show_all).pack(side=LEFT, padx=4)
+               bg=self.colors['bg_dark'], fg="white",
+               command=self.show_all).pack(side=LEFT, padx=4)
 
-
-        # ── SELECTED RECORD DETAILS (FIXED) ──────────────────────────────
+        # ── SELECTED RECORD DETAILS ───────────────────────────────────
         det_lf = LabelFrame(
             Left_frame, bd=2, bg=self.colors['bg_card'], relief=RIDGE,
             text="Selected Record Details",
             font=("Helvetica", 11, "bold"), fg=self.colors['secondary']
         )
         det_lf.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
-
         det_lf.grid_columnconfigure(1, weight=1)
 
         for r, (lbl, var) in enumerate([
             ("Student ID:", self.var_std_id),
-            ("Name:", self.var_std_name),
-            ("Roll No:", self.var_roll),
+            ("Name:",       self.var_std_name),
+            ("Roll No:",    self.var_roll),
             ("Department:", self.var_department),
-            ("Course:", self.var_course),
-            ("Semester:", self.var_semester),
-            ("Year:", self.var_year),
-            ("Date:", self.var_date),
-            ("Time:", self.var_time),
+            ("Course:",     self.var_course),
+            ("Semester:",   self.var_semester),
+            ("Year:",       self.var_year),
+            ("Date:",       self.var_date),
+            ("Time:",       self.var_time),
         ]):
             Label(det_lf, text=lbl, bg=self.colors['bg_card'],
-                fg="white", font=("Helvetica", 10, "bold")
-                ).grid(row=r, column=0, padx=8, pady=3, sticky=W)
-
+                  fg="white", font=("Helvetica", 10, "bold")
+                  ).grid(row=r, column=0, padx=8, pady=3, sticky=W)
             ttk.Entry(det_lf, textvariable=var).grid(
-                row=r, column=1, padx=8, pady=3, sticky="ew"
-            )
+                row=r, column=1, padx=8, pady=3, sticky="ew")
 
         Label(det_lf, text="Status:", bg=self.colors['bg_card'],
-            fg="white", font=("Helvetica", 10, "bold")
-            ).grid(row=9, column=0, padx=8, pady=3, sticky=W)
-
+              fg="white", font=("Helvetica", 10, "bold")
+              ).grid(row=9, column=0, padx=8, pady=3, sticky=W)
         ttk.Combobox(det_lf, textvariable=self.var_status,
-                    values=("Select", "Present", "Absent"),
-                    state="readonly"
-                    ).grid(row=9, column=1, padx=8, pady=3, sticky="ew")
+                     values=("Select", "Present", "Absent"),
+                     state="readonly"
+                     ).grid(row=9, column=1, padx=8, pady=3, sticky="ew")
 
-
-        # ── ACTION BUTTONS ───────────────────────────────────────────────
+        # ── ACTION BUTTONS ────────────────────────────────────────────
         act = Frame(Left_frame, bd=2, relief=RIDGE, bg=self.colors['bg_card'])
         act.grid(row=2, column=0, sticky="ew", padx=8, pady=6)
-
         act.grid_columnconfigure(0, weight=1)
         act.grid_columnconfigure(1, weight=1)
 
         Button(act, text="Import CSV", bg=self.colors['success'], fg="white",
-            command=self.import_csv).grid(row=0, column=0, padx=4, pady=4, sticky="ew")
-
+               command=self.import_csv).grid(row=0, column=0, padx=4, pady=4, sticky="ew")
         Button(act, text="Export CSV", bg=self.colors['primary'], fg="white",
-            command=self.export_csv).grid(row=0, column=1, padx=4, pady=4, sticky="ew")
-
+               command=self.export_csv).grid(row=0, column=1, padx=4, pady=4, sticky="ew")
         Button(act, text="Reset", bg=self.colors['warning'], fg="white",
-            command=self.reset_data).grid(row=1, column=0, padx=4, pady=4, sticky="ew")
-
+               command=self.reset_data).grid(row=1, column=0, padx=4, pady=4, sticky="ew")
         Button(act, text="Refresh", bg=self.colors['info'], fg="white",
-            command=self.refresh_all).grid(row=1, column=1, padx=4, pady=4, sticky="ew")
-        # ════ RIGHT SIDE ═════════════════════════════════════════════
+               command=self.refresh_all).grid(row=1, column=1, padx=4, pady=4, sticky="ew")
+
+        # ════ RIGHT SIDE ══════════════════════════════════════════════
         right_side = Frame(body, bg=self.colors['bg_dark'])
         right_side.pack(side=LEFT, fill=BOTH, expand=True)
 
@@ -293,7 +351,6 @@ class AttendanceSystem:
         qsf.pack(fill=X, padx=8, pady=4)
         Label(qsf, text="Quick Search:", bg=self.colors['bg_card'],
               fg="white", font=("Helvetica", 11, "bold")).pack(side=LEFT, padx=4)
-        #quick search filters within the currently filtered dataset (mydata or _filtered_data)
         self.search_var = StringVar()
         self.search_var.trace('w', lambda *a: self.quick_search())
         ttk.Entry(qsf, textvariable=self.search_var,
@@ -343,7 +400,6 @@ class AttendanceSystem:
         self.attendance_table.tag_configure('absent',  background='#f8d7da')
 
         # ── Analysis panel ───────────────────────────────────────────
-        # Displays today's summary, per-semester present count, date range summary, and recent entries.
         ana_lf = LabelFrame(
             right_side, bd=2, bg=self.colors['bg_card'], relief=RIDGE,
             text="📊  Attendance Analysis",
@@ -374,7 +430,6 @@ class AttendanceSystem:
             font=("Helvetica", 10, "bold"), bg=self.colors['bg_dark'], fg=self.colors['warning'])
         self.lbl_t_rate.pack(anchor=W, padx=8, pady=(0, 6))
 
-        # ★ NEW: per-semester present count replaces old "By Department"
         c1 = _card(1, "📚 By Semester")
         self.lbl_sem = Label(c1, text="—",
             font=("Helvetica", 9), bg=self.colors['bg_dark'], fg="white", justify=LEFT)
@@ -435,7 +490,7 @@ class AttendanceSystem:
     #  DB ENRICHMENT
     #  Builds a 10-element internal row:
     #  [0]id [1]name [2]roll [3]dept [4]course [5]sem [6]year [7]date [8]time [9]status
-    #  DB values (semester, year, course, dept) take priority over CSV values.
+    #  DB values take priority over CSV values.
     # ═════════════════════════════════════════════════════════════════
     def _enrich(self, student_id, name, roll, dept_csv, course_csv,
                 date, time_, status):
@@ -463,9 +518,7 @@ class AttendanceSystem:
                 self.attendance_table.insert("", END, values=row, tags=(tag,))
 
     # ═════════════════════════════════════════════════════════════════
-    #  CSV LOAD
-    #  Handles both old 8-col and newer 9-col CSV formats.
-    #  After reading, every row is enriched with DB semester + year.
+    #  CSV LOAD — uses parse_csv_row() for correct column detection
     # ═════════════════════════════════════════════════════════════════
     def load_from_csv(self):
         global mydata
@@ -481,21 +534,12 @@ class AttendanceSystem:
         try:
             with open(csv_file, "r") as f:
                 reader = csv.reader(f)
-                next(reader, None)              # skip header
+                next(reader, None)   # skip header
                 for row in reader:
-                    if not row or len(row) < 8:
+                    parsed = parse_csv_row(row)
+                    if parsed is None:
                         continue
-                    sid        = row[0].strip()
-                    name       = row[1]
-                    roll       = row[2]
-                    dept_csv   = row[3]
-                    course_csv = row[4]
-                    # 8-col: date=row[5], time=row[6], status=row[7]
-                    # 9-col: (old sem)=row[5], date=row[6], time=row[7], status=row[8]
-                    if len(row) >= 9:
-                        date, time_, status = row[6], row[7], row[8]
-                    else:
-                        date, time_, status = row[5], row[6], row[7]
+                    sid, name, roll, dept_csv, course_csv, date, time_, status = parsed
                     mydata.append(
                         self._enrich(sid, name, roll, dept_csv, course_csv,
                                      date, time_, status)
@@ -506,7 +550,6 @@ class AttendanceSystem:
             print(f"Loaded {len(mydata)} records from {csv_file}")
         except Exception as e:
             print(f"CSV error: {e}")
-
     def import_csv(self):
         global mydata
         mydata.clear()
@@ -520,17 +563,10 @@ class AttendanceSystem:
                 reader = csv.reader(f)
                 next(reader, None)
                 for row in reader:
-                    if not row or len(row) < 8:
+                    parsed = parse_csv_row(row)
+                    if parsed is None:
                         continue
-                    sid        = row[0].strip()
-                    name       = row[1]
-                    roll       = row[2]
-                    dept_csv   = row[3]
-                    course_csv = row[4]
-                    if len(row) >= 9:
-                        date, time_, status = row[6], row[7], row[8]
-                    else:
-                        date, time_, status = row[5], row[6], row[7]
+                    sid, name, roll, dept_csv, course_csv, date, time_, status = parsed
                     mydata.append(
                         self._enrich(sid, name, roll, dept_csv, course_csv,
                                      date, time_, status)
@@ -569,6 +605,8 @@ class AttendanceSystem:
     # ═════════════════════════════════════════════════════════════════
     #  FILTERS
     #  [3]dept  [4]course  [5]sem  [6]year  [7]date  [9]status
+    #  Date filter normalizes BOTH sides before comparing — handles
+    #  "3/5/2026" vs "03/05/2026" and any other format mismatch.
     # ═════════════════════════════════════════════════════════════════
     def apply_filters(self):
         dept     = self.var_search_department.get().strip()
@@ -595,9 +633,13 @@ class AttendanceSystem:
             filtered = [r for r in filtered
                         if len(r) > 6 and r[6].strip() == year]
 
+        # ── DATE FILTER: normalize both sides so "3/5/2026" == "03/05/2026" ──
         if date_str:
-            filtered = [r for r in filtered
-                        if len(r) > 7 and r[7].strip() == date_str]
+            target = normalize_date(date_str)
+            filtered = [
+                r for r in filtered
+                if len(r) > 7 and normalize_date(str(r[7])) == target
+            ]
 
         self._filtered_data = filtered
         self.search_var.set("")
@@ -660,15 +702,22 @@ class AttendanceSystem:
     # ═════════════════════════════════════════════════════════════════
     #  ANALYSIS
     #  date=[7]  time=[8]  status=[9]  sem=[5]
+    #  Today's summary uses normalize_date() so "3/5/2026" matches today.
     # ═════════════════════════════════════════════════════════════════
     def update_analysis(self, data=None):
         if data is None:
             data = mydata
-        today_str = strftime("%d/%m/%Y", localtime())
 
-        # Today's summary (always from full mydata)
-        today_rows = [r for r in mydata if len(r) > 7 and r[7].strip() == today_str]
-        tp = sum(1 for r in today_rows if len(r) > 9 and str(r[9]).strip().lower() == 'present')
+        # Normalize today's date to "dd/mm/yyyy" so it matches stored dates
+        today_str = normalize_date(strftime("%d/%m/%Y", localtime()))
+
+        # Today's summary — always computed from full mydata
+        today_rows = [
+            r for r in mydata
+            if len(r) > 7 and normalize_date(str(r[7])) == today_str
+        ]
+        tp = sum(1 for r in today_rows
+                 if len(r) > 9 and str(r[9]).strip().lower() == 'present')
         ta = len(today_rows) - tp
         tr = (tp / len(today_rows) * 100) if today_rows else 0
         self.lbl_t_present.config(text=f"Present : {tp}")
@@ -688,8 +737,9 @@ class AttendanceSystem:
         else:
             self.lbl_sem.config(text="No semester data\n(DB not connected?)")
 
-        # Date range
-        dates = [r[7].strip() for r in data if len(r) > 7 and r[7].strip()]
+        # Date range — parse normalized dates for correct min/max
+        dates = [normalize_date(str(r[7])) for r in data if len(r) > 7 and r[7]]
+        dates = [d for d in dates if d]
         if dates:
             def _p(d):
                 try:    return datetime.strptime(d, "%d/%m/%Y")
@@ -743,8 +793,6 @@ class AttendanceSystem:
         self.fetch_data(mydata)
         self.update_statistics()
         self.update_analysis(mydata)
-
-
 if __name__ == "__main__":
     root = Tk()
     app = AttendanceSystem(root)

@@ -8,6 +8,8 @@ import mysql.connector
 from mysql.connector import Error
 import cv2
 import re
+import numpy as np
+from face_duplicate_checker import FaceDuplicateChecker   
 
 
 class Student:
@@ -284,10 +286,9 @@ class Student:
         self.student_table.bind("<ButtonRelease>", self.get_cursor)
 
     # ─────────────────────────────────────────────────────
-    # VALIDATE FIELDS  ← FIX: now properly inside the class
+    # VALIDATE FIELDS
     # ─────────────────────────────────────────────────────
     def validate_fields(self):
-        # Dropdowns
         if self.var_dep.get() == "Select Department":
             messagebox.showerror("Error", "Please select Department", parent=self.root)
             return False
@@ -300,63 +301,46 @@ class Student:
         if self.var_semester.get() == "Select Semester":
             messagebox.showerror("Error", "Please select Semester", parent=self.root)
             return False
-
-        # Student ID — digits only, non-empty
         if not self.var_std_id.get().strip():
             messagebox.showerror("Error", "Student ID is required", parent=self.root)
             return False
         if not self.var_std_id.get().isdigit():
             messagebox.showerror("Error", "Student ID must be numeric", parent=self.root)
             return False
-
-        # Student Name — letters and spaces only
         if not self.var_std_name.get().strip():
             messagebox.showerror("Error", "Student Name is required", parent=self.root)
             return False
         if not self.var_std_name.get().replace(" ", "").isalpha():
             messagebox.showerror("Error", "Name must contain letters only", parent=self.root)
             return False
-
-        # Roll No — digits only
         if not self.var_roll.get().strip():
             messagebox.showerror("Error", "Roll number is required", parent=self.root)
             return False
         if not self.var_roll.get().isdigit():
             messagebox.showerror("Error", "Roll number must be numeric", parent=self.root)
             return False
-
-        # Email — standard format
         email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
         if not re.match(email_pattern, self.var_email.get()):
             messagebox.showerror("Error", "Invalid email format (e.g. user@example.com)", parent=self.root)
             return False
-
-        # Phone — exactly 10 digits
         if not self.var_phone.get().strip():
             messagebox.showerror("Error", "Phone number is required", parent=self.root)
             return False
         if not (self.var_phone.get().isdigit() and len(self.var_phone.get()) == 10):
             messagebox.showerror("Error", "Phone number must be exactly 10 digits", parent=self.root)
             return False
-
-        # Address — non-empty
         if not self.var_address.get().strip():
             messagebox.showerror("Error", "Address is required", parent=self.root)
             return False
-
-        # DOB — non-empty
         if not self.var_dob.get().strip():
             messagebox.showerror("Error", "Please select Date of Birth", parent=self.root)
             return False
-
-        # Teacher Name — letters and spaces only
         if not self.var_teacher.get().strip():
             messagebox.showerror("Error", "Teacher Name is required", parent=self.root)
             return False
         if not self.var_teacher.get().replace(" ", "").isalpha():
             messagebox.showerror("Error", "Teacher name must contain letters only", parent=self.root)
             return False
-
         return True
 
     # ─────────────────────────────────────────────────────
@@ -414,7 +398,7 @@ class Student:
         cursor_focus = self.student_table.focus()
         content = self.student_table.item(cursor_focus)
         data = content["values"]
-        if not data:          # nothing selected (e.g. clicked header)
+        if not data:
             return
 
         self.var_dep.set(data[0])
@@ -433,7 +417,7 @@ class Student:
         self.var_photo_sample.set(data[13])
 
     # ─────────────────────────────────────────────────────
-    # UPDATE DATA  ← FIX: conn.commit/close now inside if-block
+    # UPDATE DATA
     # ─────────────────────────────────────────────────────
     def update_data(self):
         if not self.validate_fields():
@@ -459,11 +443,11 @@ class Student:
                     self.gender_var.get(), self.var_dob.get(), self.var_email.get(),
                     self.var_phone.get(), self.var_address.get(), self.var_teacher.get(),
                     self.var_photo_sample.get(),
-                    self.var_std_id.get()          # WHERE clause — must be last
+                    self.var_std_id.get()
                 )
             )
-            conn.commit()   # ← inside the if-block now
-            conn.close()    # ← inside the if-block now
+            conn.commit()
+            conn.close()
             self.fetch_data()
             messagebox.showinfo("Success", "Student details updated successfully", parent=self.root)
 
@@ -471,26 +455,84 @@ class Student:
             messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
 
     # ─────────────────────────────────────────────────────
-    # DELETE DATA  ← FIX: conn.commit/close inside if-block
+    # DELETE PHOTO SAMPLES FROM data/ FOLDER
+    # ─────────────────────────────────────────────────────
+    def _delete_photos(self, student_id):
+        """
+        Delete all images of a student from the correct data folder
+        """
+
+        # ✅ YOUR ACTUAL FOLDER (FIXED PATH)
+        data_dir = r"C:\Users\Dell\Desktop\PYTHON\data"
+
+        if not os.path.exists(data_dir):
+            print("[ERROR] Data folder not found:", data_dir)
+            return 0
+
+        deleted = 0
+
+        for filename in os.listdir(data_dir):
+            file_path = os.path.join(data_dir, filename)
+
+            # ✅ Flexible matching (important fix)
+            if str(student_id) in filename and filename.endswith(".jpg"):
+                try:
+                    os.remove(file_path)
+                    print("[DELETED]:", filename)
+                    deleted += 1
+                except Exception as e:
+                    print("[ERROR] Could not delete:", filename, e)
+
+        print("[INFO] Total deleted:", deleted)
+        return deleted
+
+    # ─────────────────────────────────────────────────────
+    # DELETE DATA
     # ─────────────────────────────────────────────────────
     def delete_data(self):
         if not self.var_std_id.get().strip():
             messagebox.showerror("Error", "Student ID is required", parent=self.root)
             return
         try:
-            confirm = messagebox.askyesno("Delete", "Do you want to delete this student?", parent=self.root)
+            confirm = messagebox.askyesno(
+                "Delete",
+                "Do you want to delete this student?\n\n"
+                "This will also permanently delete all photo samples for this student.",
+                parent=self.root
+            )
             if not confirm:
                 return
 
+            student_id = self.var_std_id.get()
+
+            # ── Delete from database ──
             conn = mysql.connector.connect(
                 host="localhost", username="root", password="", database="face_recognizer"
             )
             my_cursor = conn.cursor()
-            my_cursor.execute("DELETE FROM student WHERE student_id=%s", (self.var_std_id.get(),))
-            conn.commit()   # ← inside the if-block now
-            conn.close()    # ← inside the if-block now
+            my_cursor.execute("DELETE FROM student WHERE student_id=%s", (student_id,))
+            conn.commit()
+            conn.close()
+
+            # ── Delete photo samples from disk ──
+            photos_deleted = self._delete_photos(student_id)
+
             self.fetch_data()
-            messagebox.showinfo("Delete", "Student deleted successfully", parent=self.root)
+            self.reset_data()
+
+            if photos_deleted > 0:
+                messagebox.showinfo(
+                    "Delete",
+                    f"Student deleted successfully.\n"
+                    f"{photos_deleted} photo sample(s) also removed from disk.",
+                    parent=self.root
+                )
+            else:
+                messagebox.showinfo(
+                    "Delete",
+                    "Student deleted successfully.\n(No photo samples were found on disk.)",
+                    parent=self.root
+                )
 
         except Exception as es:
             messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
@@ -515,17 +557,158 @@ class Student:
         self.var_photo_sample.set("No")
 
     # ─────────────────────────────────────────────────────
-    # GENERATE DATASET (take photo samples)
+    # CHECK IF FACE PHOTOS ALREADY EXIST FOR THIS STUDENT
+    # ─────────────────────────────────────────────────────
+    def _photos_already_exist(self, student_id):
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        if not os.path.exists(data_dir):
+            return False, 0
+
+        prefix = f"user.{student_id}."
+        matching = [f for f in os.listdir(data_dir) if f.startswith(prefix) and f.endswith(".jpg")]
+        return len(matching) > 0, len(matching)
+
+    # ─────────────────────────────────────────────────────
+    # CHECK IF FACE IS ALREADY RECOGNISED BY TRAINED MODEL
+    # ─────────────────────────────────────────────────────
+    def _face_already_in_model(self, student_id, cascade_path, classifier_path, cap):
+        if not os.path.exists(classifier_path):
+            return False, None
+
+        try:
+            clf = cv2.face.LBPHFaceRecognizer_create()
+            clf.read(classifier_path)
+        except Exception:
+            return False, None
+
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        if face_cascade.empty():
+            return False, None
+
+        best_distance = None
+        frames_checked = 0
+        max_frames = 20
+
+        while frames_checked < max_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames_checked += 1
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5, minSize=(80, 80))
+
+            for (x, y, w, h) in faces:
+                face_roi = gray[y:y + h, x:x + w]
+                face_resized = cv2.resize(face_roi, (450, 450))
+                predicted_id, distance = clf.predict(face_resized)
+
+                if best_distance is None or distance < best_distance:
+                    best_distance = distance
+
+                if predicted_id == int(student_id) and distance < 60:
+                    return True, distance
+
+        return False, best_distance
+
+    # ─────────────────────────────────────────────────────
+    # GENERATE DATASET (take photo samples)  ← UPDATED
     # ─────────────────────────────────────────────────────
     def generate_dataset(self):
         if not self.validate_fields():
             return
+
+        student_id = self.var_std_id.get()
+
+        # ── Step 1: fast filename check (same ID, no camera needed) ──────
+        photos_exist, photo_count = self._photos_already_exist(student_id)
+        if photos_exist:
+            messagebox.showerror(
+                "Already Exists",
+                f"Photo samples for Student ID {student_id} already exist!\n"
+                f"({photo_count} photos found in the data/ folder)\n\n"
+                f"Use 'Update Photo Sample' to re-capture.",
+                parent=self.root
+            )
+            return
+
+        # ── Step 2: verify required files ────────────────────────────────
+        if not os.path.exists("data"):
+            os.makedirs("data")
+
+        cascade_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "haarcascade_frontalface_default.xml"
+        )
+        if not os.path.exists(cascade_path):
+            messagebox.showerror(
+                "Error", f"Cascade file not found at:\n{cascade_path}", parent=self.root
+            )
+            return
+
+        face_classifier = cv2.CascadeClassifier(cascade_path)
+        if face_classifier.empty():
+            messagebox.showerror("Error", "Failed to load cascade classifier", parent=self.root)
+            return
+
+        # ── Step 3: open camera ONCE (reused for all checks + capture) ───
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            messagebox.showerror("Error", "Could not open camera", parent=self.root)
+            return
+
+        # ── Step 4: CROSS-ID duplicate face check (NEW) ──────────────────
+        #   Catches someone registering the SAME face under a DIFFERENT ID.
+        messagebox.showinfo(
+            "Face Duplicate Check",
+            "Please look at the camera.\n\n"
+            "The system will compare your face against ALL existing students\n"
+            "to make sure this face is not already registered under another ID.\n\n"
+            "Click OK to begin.",
+            parent=self.root
+        )
+
+        checker = FaceDuplicateChecker(data_dir="data")
+        is_dup, matched_id, dist = checker.is_duplicate_face(
+            cap=cap,
+            cascade_path=cascade_path,
+            exclude_student_id=None   # compare against everyone
+        )
+
+        if is_dup:
+            cap.release()
+            cv2.destroyAllWindows()
+            messagebox.showerror(
+                "Duplicate Face Detected",
+                f"This face is already registered as Student ID: {matched_id}\n"
+                f"(LBPH similarity distance: {dist:.1f}  —  threshold: 60)\n\n"
+                "A new registration cannot be created for an existing face.\n"
+                "If this is an error, contact the administrator.",
+                parent=self.root
+            )
+            return
+
+        # ── Step 5: trained-model check (existing logic kept) ────────────
+        classifier_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "classifier.xml"
+        )
+        already_recognised, best_dist = self._face_already_in_model(
+            student_id, cascade_path, classifier_path, cap
+        )
+        if already_recognised:
+            cap.release()
+            cv2.destroyAllWindows()
+            messagebox.showerror(
+                "Face Already Registered",
+                f"The face is already recognised as Student ID {student_id} in the model.\n"
+                f"(Recognition distance: {best_dist:.1f})\n\n"
+                "Use 'Update Photo Sample' to re-capture if needed.",
+                parent=self.root
+            )
+            return
+
+        # ── Step 6: save student details to DB before capturing ──────────
         try:
-            if not os.path.exists("data"):
-                os.makedirs("data")
-
-            student_id = self.var_std_id.get()
-
             conn = mysql.connector.connect(
                 host="localhost", username="root", password="", database="face_recognizer"
             )
@@ -546,70 +729,89 @@ class Student:
             )
             conn.commit()
             conn.close()
-
-            cascade_path = os.path.join(os.path.dirname(__file__), "haarcascade_frontalface_default.xml")
-            if not os.path.exists(cascade_path):
-                messagebox.showerror("Error", f"Cascade file not found at: {cascade_path}", parent=self.root)
-                return
-
-            face_classifier = cv2.CascadeClassifier(cascade_path)
-            if face_classifier.empty():
-                messagebox.showerror("Error", "Failed to load cascade classifier", parent=self.root)
-                return
-
-            def face_cropped(img):
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                faces = face_classifier.detectMultiScale(gray, 1.3, 5)
-                for (x, y, w, h) in faces:
-                    return img[y:y + h, x:x + w]
-                return None
-
-            cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
-                messagebox.showerror("Error", "Could not open camera", parent=self.root)
-                return
-
-            img_id = 0
-            messagebox.showinfo("Info", "Camera started. Press ENTER to stop or wait for 100 samples", parent=self.root)
-
-            while True:
-                ret, my_frame = cap.read()
-                if not ret:
-                    messagebox.showerror("Error", "Failed to capture frame", parent=self.root)
-                    break
-
-                cropped_face = face_cropped(my_frame)
-                if cropped_face is not None:
-                    img_id += 1
-                    face = cv2.resize(cropped_face, (450, 450))
-                    face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                    cv2.imwrite(f"data/user.{student_id}.{img_id}.jpg", face)
-                    cv2.putText(face, str(img_id), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), 2)
-                    cv2.imshow("Cropped Face", face)
-
-                cv2.imshow("Camera Feed", my_frame)
-
-                if cv2.waitKey(1) == 13 or img_id == 100:
-                    break
-
+        except Exception as db_err:
             cap.release()
-            cv2.destroyAllWindows()
+            messagebox.showerror(
+                "Database Error", f"Could not save student info:\n{db_err}", parent=self.root
+            )
+            return
 
-            if img_id > 0:
+        # ── Step 7: capture 100 face photos ──────────────────────────────
+        def face_cropped(img):
+            gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            faces = face_classifier.detectMultiScale(gray, 1.3, 5)
+            for (x, y, w, h) in faces:
+                return img[y:y + h, x:x + w]
+            return None
+
+        img_id = 0
+        messagebox.showinfo(
+            "Ready to Capture",
+            "All checks passed — no duplicate found.\n\n"
+            "Camera will now capture 100 photo samples.\n"
+            "Press ENTER or wait for completion.",
+            parent=self.root
+        )
+
+        while True:
+            ret, my_frame = cap.read()
+            if not ret:
+                messagebox.showerror("Error", "Failed to capture frame", parent=self.root)
+                break
+
+            cropped_face = face_cropped(my_frame)
+            if cropped_face is not None:
+                img_id += 1
+                face = cv2.resize(cropped_face, (450, 450))
+                face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                cv2.imwrite(f"data/user.{student_id}.{img_id}.jpg", face)
+                cv2.putText(face, f"{img_id}/100", (50, 50),
+                            cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), 2)
+                cv2.imshow("Cropped Face", face)
+
+            display_frame = my_frame.copy()
+            cv2.putText(display_frame, f"Capturing: {img_id}/100", (20, 40),
+                        cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+            cv2.imshow("Camera Feed", display_frame)
+
+            if cv2.waitKey(1) == 13 or img_id == 100:
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
+        # ── Step 8: mark photoSample = Yes in DB ─────────────────────────
+        if img_id > 0:
+            try:
                 conn = mysql.connector.connect(
                     host="localhost", username="root", password="", database="face_recognizer"
                 )
                 my_cursor = conn.cursor()
-                my_cursor.execute("UPDATE student SET photoSample=%s WHERE student_id=%s", ("Yes", student_id))
+                my_cursor.execute(
+                    "UPDATE student SET photoSample=%s WHERE student_id=%s",
+                    ("Yes", student_id)
+                )
                 conn.commit()
                 conn.close()
-                self.fetch_data()
-                messagebox.showinfo("Result", f"Dataset generation completed!\n{img_id} photos saved.", parent=self.root)
-            else:
-                messagebox.showwarning("Warning", "No face detected. Please try again.", parent=self.root)
+            except Exception as db_err:
+                messagebox.showwarning(
+                    "Warning",
+                    f"Photos saved but could not update DB status:\n{db_err}",
+                    parent=self.root
+                )
 
-        except Exception as es:
-            messagebox.showerror("Error", f"Due To: {str(es)}", parent=self.root)
+            self.fetch_data()
+            messagebox.showinfo(
+                "Success",
+                f"Dataset generation completed!\n{img_id} photos saved for Student ID {student_id}.",
+                parent=self.root
+            )
+        else:
+            messagebox.showwarning(
+                "Warning",
+                "No face detected during capture. Please try again.",
+                parent=self.root
+            )
 
     # ─────────────────────────────────────────────────────
     # UPDATE COURSES (department → course dropdown)

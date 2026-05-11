@@ -39,8 +39,8 @@ class FaceRecognitionSystem:
         
         # Face detection parameters
         self.SCALE_FACTOR = 1.1
-        self.MIN_NEIGHBORS = 5
-        self.CONFIDENCE_THRESHOLD = 86  # Increased from 50 to 70 for better accuracy
+        self.MIN_NEIGHBORS = 6
+        self.CONFIDENCE_THRESHOLD = 30  
         
         # ====== FIXED: Get absolute paths ======
         # Get the directory where this script is located
@@ -260,7 +260,7 @@ class FaceRecognitionSystem:
         
         settings_window = Toplevel(self.root)
         settings_window.title("Recognition Settings")
-        settings_window.geometry("500x300+500+300")
+        settings_window.geometry("500x320+500+300")
         settings_window.configure(bg="#1a1e37")
         settings_window.resizable(False, False)
         
@@ -274,12 +274,12 @@ class FaceRecognitionSystem:
         )
         title.pack(pady=20)
         
-        # Info label
+        # FIX: correct explanation for LBPH distance (opposite of percentage)
         info = Label(
             settings_window,
-            text="Adjust the confidence threshold to improve accuracy\n\n"
-                 "Higher values = More strict (fewer false positives)\n"
-                 "Lower values = More lenient (may recognize wrong faces)",
+            text="LBPH Distance Threshold  (lower = stricter)\n\n"
+                 "Lower value = More strict  (fewer false matches)\n"
+                 "Higher value = More lenient  (may recognise wrong faces)",
             font=("Arial", 10),
             bg="#1a1e37",
             fg="#cccccc",
@@ -290,7 +290,7 @@ class FaceRecognitionSystem:
         # Current threshold label
         current_label = Label(
             settings_window,
-            text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}%",
+            text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}",
             font=("Arial", 12, "bold"),
             bg="#1a1e37",
             fg="#4ae24a"
@@ -300,18 +300,27 @@ class FaceRecognitionSystem:
         # Slider
         def update_threshold(val):
             self.CONFIDENCE_THRESHOLD = int(val)
-            current_label.config(text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}%")
+            current_label.config(text=f"Current Threshold: {self.CONFIDENCE_THRESHOLD}")
             
-            # Visual feedback
-            if int(val) < 60:
-                current_label.config(fg="#e74c3c")  # Red - too lenient
-                recommendation.config(text="⚠ Warning: Low threshold may cause false recognitions")
-            elif int(val) < 75:
-                current_label.config(fg="#f39c12")  # Orange - moderate
-                recommendation.config(text="✓ Moderate threshold - balanced accuracy")
+            # FIX: correct colour feedback for LBPH distance scale
+            if int(val) <= 40:
+                current_label.config(fg="#e74c3c")       # red  — very strict, may miss real faces
+                recommendation.config(
+                    text="⚠ Very strict — may miss real faces in poor lighting",
+                    fg="#e74c3c"
+                )
+            elif int(val) <= 60:
+                current_label.config(fg="#4ae24a")       # green — balanced
+                recommendation.config(
+                    text="✓ Balanced — recommended for most setups",
+                    fg="#4ae24a"
+                )
             else:
-                current_label.config(fg="#4ae24a")  # Green - strict
-                recommendation.config(text="✓ High threshold - strict recognition")
+                current_label.config(fg="#f39c12")       # orange — lenient
+                recommendation.config(
+                    text="⚠ Lenient — may accept wrong or similar-looking faces",
+                    fg="#f39c12"
+                )
         
         slider = Scale(
             settings_window,
@@ -332,7 +341,7 @@ class FaceRecognitionSystem:
         # Recommendation label
         recommendation = Label(
             settings_window,
-            text="✓ High threshold - strict recognition",
+            text="✓ Balanced — recommended for most setups",
             font=("Arial", 9, "italic"),
             bg="#1a1e37",
             fg="#4ae24a"
@@ -443,10 +452,14 @@ class FaceRecognitionSystem:
         try:
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
  
+            # FIX 5: equalise histogram for stable detection under indoor light
+            gray_image = cv2.equalizeHist(gray_image)
+ 
+            # FIX 3: minNeighbors=5, minSize=(100,100) kept same
             faces = classifier.detectMultiScale(
                 gray_image,
                 scaleFactor=1.1,
-                minNeighbors=6,
+                minNeighbors=5,
                 minSize=(100, 100)
              )
             
@@ -457,19 +470,26 @@ class FaceRecognitionSystem:
                 try:
                     face_roi = gray_image[y:y + h, x:x + w]
  
+                    # FIX 1: resize to match training size (450x450)
+                    # Without this, LBPH gets different size every frame = wrong person
+                    face_roi = cv2.resize(face_roi, (450, 450))
+ 
+                    # FIX 5b: equalise ROI to match training preprocessing
+                    face_roi = cv2.equalizeHist(face_roi)
+ 
                     # LBPH predict() returns (label, distance)
                     # LOWER distance = BETTER match  (0 = perfect, 100+ = poor)
-                    # FIXED: removed broken formula (1 - prediction/300)
                     student_id, prediction = clf.predict(face_roi)
  
                     print(f"Face detected - ID: {student_id}, LBPH Distance: {prediction:.1f}")
  
-                    if prediction < 60:
+                    # FIX 2: use self.CONFIDENCE_THRESHOLD (set to 50 in __init__)
+                    if prediction < self.CONFIDENCE_THRESHOLD:
                         # ✅ HIGH CONFIDENCE — strict match, mark attendance
                         confidence = max(0, min(100, int(100 - prediction)))
                         student_info = self._fetch_student_info(student_id)
  
-                        if student_info and prediction < 70:
+                        if student_info:
                             cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 3)
                             text_y_start = y + h + 25
                             self._draw_text(img, f"Name: {student_info['name']}",       x, text_y_start)
@@ -496,7 +516,7 @@ class FaceRecognitionSystem:
                                 f"⚠ Face detected (ID: {student_id}) but not in database"
                             )
  
-                    elif 60 <= prediction < 80:
+                    elif prediction < 80:
                         # ⚠ UNCERTAIN — possible match, not confident enough
                         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 165, 255), 3)
                         text_y_start = y + h + 25
@@ -526,6 +546,47 @@ class FaceRecognitionSystem:
         except Exception as e:
             print(f"Error in face boundary detection: {e}")
             return img, f"Error: {str(e)}"
+ 
+    def _process_frame(self):
+        """Process video frames continuously"""
+        while self.is_running:
+            try:
+                ret, frame = self.video_capture.read()
+                
+                if not ret:
+                    print("Failed to grab frame")
+                    break
+ 
+                # FIX 4: flip BEFORE detection so bounding box coordinates are correct
+                frame = cv2.flip(frame, 1)
+                
+                # Process frame for face recognition
+                processed_frame, info_text = self._draw_face_boundary(
+                    frame, 
+                    self.face_cascade, 
+                    self.clf
+                )
+                
+                # Convert to RGB for tkinter
+                frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+                
+                # Resize to fit the display area
+                frame_resized = cv2.resize(frame_rgb, (900, 550))
+                
+                # Convert to PhotoImage
+                img = Image.fromarray(frame_resized)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.video_label.imgtk = imgtk
+                # Update the video label — capture variables to avoid closure bug
+                self.root.after(0, lambda i=imgtk, t=info_text: (
+                    self.video_label.configure(image=i, text=""),
+                    self.info_label.configure(text=t)
+                ))
+                
+            except Exception as e:
+                print(f"Error in frame processing: {e}")
+                break
+ 
     
     def _draw_text(self, img, text, x, y):
         """
@@ -545,43 +606,6 @@ class FaceRecognitionSystem:
             (255, 255, 255), 
             2
         )
-    
-    def _process_frame(self):
-        """Process video frames continuously"""
-        while self.is_running:
-            try:
-                ret, frame = self.video_capture.read()
-                
-                if not ret:
-                    print("Failed to grab frame")
-                    break
-                
-                # Process frame for face recognition
-                processed_frame, info_text = self._draw_face_boundary(
-                    frame, 
-                    self.face_cascade, 
-                    self.clf
-                )
-                
-                # Convert to RGB for tkinter
-                frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
-                
-                # Resize to fit the display area (1430x500)
-                frame_resized = cv2.resize(frame_rgb, (1430, 500))
-                
-                # Convert to PhotoImage
-                img = Image.fromarray(frame_resized)
-                imgtk = ImageTk.PhotoImage(image=img)
-                self.video_label.imgtk = imgtk # Keep reference to avoid garbage collection
-                # Update the video label
-                self.root.after(0, lambda: self.video_label.configure(image=imgtk, text=""))
-                self.root.after(0, lambda: self.info_label.configure(text=info_text))
-                # Keep reference to avoid garbage collection
-                
-            except Exception as e:
-                print(f"Error in frame processing: {e}")
-                break
-    
     def start_face_recognition(self):
         """Start the face recognition process using webcam"""
         # Verify required files exist
